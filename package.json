@@ -1,0 +1,17 @@
+{
+  "name": "aspi",
+  "description": "Rest API client for typescript projects with chain of responsibility design pattern.",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "author": {
+    "email": "harshpareek91@gmai.com",
+    "name": "Harsh Pareek",
+    "url": "https://hrshwrites.vercel.app"
+  }
+}
