@@ -1,15 +1,51 @@
 # aspi
 
-To install dependencies:
+I made this project because I am not happy with any of the Rest API clients available in eco system. Sure, Axios is great but it feels so bloated and I am never going to use interceptors or any of the other features it provides. I just want to make a simple request and get the response. That's it. So, I made this project. It is a simple Rest API client that is built on top of native fetch API. It is very simple to use and has a very small bundle size. It is perfect for small projects where you don't want to bloat your project with unnecessary features.
 
-```bash
-bun install
+## Why Aspi?
+1. End to end TypeScript support.
+2. Very small bundle size.
+3. Chain of responsibility pattern.
+4. Monadic API.
+5. Errors as values with Result type.
+
+
+## Example
+```typescript
+import { aspi, Result } from 'aspi';
+
+const apiClient = new Aspi({
+  baseUrl: "https://api.example.com",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+const getTodos = async (id: number) => {
+  const response = await apiClient
+    .get(`/todos/${id}`)
+    .notFound(() => ({
+      message: "Todo not found",
+    }))
+    .json<{
+      id: number;
+      title: string;
+      completed: boolean;
+    }>();
+
+  Result.match(response, {
+    onOk: (data) => {
+      console.log(data);
+    },
+    onErr: (error) => {
+      if (error.tag === "ASPI_ERROR") {
+        console.error(error.response.status);
+      } else if (error.tag === "NOT_FOUND") {
+        console.log(error.data.message);
+      }
+    },
+  });
+};
+
+getTodos(1);
 ```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.1.30. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
