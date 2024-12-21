@@ -49,6 +49,7 @@ export class Request<
   #middlewares: Middleware<TRequest, TRequest>[];
 
   constructor(
+    method: HttpMethods,
     path: string,
     config: AspiConfig,
     middlewares: Middleware<TRequest, TRequest>[] = [],
@@ -59,6 +60,7 @@ export class Request<
     this.#localRequestInit = {
       headers: config.headers,
       mode: config.mode,
+      method: method,
     } as TRequest;
   }
 
@@ -275,10 +277,8 @@ export class Request<
     >
   > {
     try {
-      let requestInit = this.#localRequestInit;
-      for (const middleware of this.#middlewares) {
-        requestInit = middleware(requestInit);
-      }
+      const request = this.#request();
+      const requestInit = request.requestInit;
 
       const response = await fetch(
         [
@@ -336,8 +336,12 @@ export class Request<
   }
 
   #request(): ErrorRequest<TRequest> {
+    let requestInit = this.#localRequestInit;
+    for (const middleware of this.#middlewares) {
+      this.#localRequestInit = middleware(this.#localRequestInit);
+    }
     return {
-      requestInit: this.#localRequestInit as unknown as TRequest,
+      requestInit: requestInit as unknown as TRequest,
       baseUrl: this.#baseUrl,
       path: this.#path,
     };

@@ -46,6 +46,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
     body?: BodyInit,
   ) {
     return new Request<M, TRequest, {}>(
+      method,
       path,
       {
         baseUrl: this.#baseUrl,
