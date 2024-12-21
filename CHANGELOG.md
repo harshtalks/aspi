@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.3
+
+### Minor Changes
+
+- fa46908: change in types of error req
+
 ## 0.1.0-next.2
 
 ### Minor Changes
