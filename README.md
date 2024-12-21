@@ -54,7 +54,6 @@ const getTodos = async (id: number) => {
 getTodos(1);
 ```
 
-
 ## Example with Schema Validation (with Zod)
 
 ```typescript
@@ -72,24 +71,27 @@ const apiClient = new Aspi({
 const getTodo = async (id: number) => {
   const response = await apiClient
     .get(`/todos/${id}`)
-    .output(z.object({
-      id: z.number(),
-      title: z.string(),
-      completed: z.boolean(),
-    }))
+    .output(
+      z.object({
+        id: z.number(),
+        title: z.string(),
+        completed: z.boolean(),
+      }),
+    )
     .json();
 
   Result.match(response, {
     onOk: (data) => {
       console.log(data);
     },
-    onErr: err => {
-      if(err.tag === "parseError"){
+    onErr: (err) => {
+      if (err.tag === 'parseError') {
         const error = err.data as ZodError;
         console.error(error.errors);
-      }else {
+      } else {
         // do something else
       }
-    }
-  })
-}
+    },
+  });
+};
+```
