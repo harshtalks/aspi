@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.2
+
+### Minor Changes
+
+- 919e90a: wrong types for result
+
 ## 0.1.0-next.1
 
 ### Patch Changes
