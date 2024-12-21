@@ -143,7 +143,7 @@ export class Request<
    *   return { message: 'Custom not found message' };
    * });
    */
-  notFound<T, A extends {}>(cb: CustomErrorCb<T, A>) {
+  notFound<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
     this.#customErrorCbs[404] = cb;
     // @ts-ignore
     return this as Request<
@@ -166,7 +166,7 @@ export class Request<
    *   return { message: 'Please login first' };
    * });
    */
-  unauthorised<T, A extends {}>(cb: CustomErrorCb<T, A>) {
+  unauthorised<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
     this.#customErrorCbs[401] = cb;
     // @ts-ignore
     return this as Request<
@@ -189,7 +189,7 @@ export class Request<
    *   return { message: 'You do not have permission' };
    * });
    */
-  forbidden<T, A extends {}>(cb: CustomErrorCb<T, A>) {
+  forbidden<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
     this.#customErrorCbs[403] = cb;
     // @ts-ignore
     return this as Request<
@@ -213,7 +213,7 @@ export class Request<
    *   return { message: 'Invalid input provided' };
    * });
    */
-  error<T, A extends {}>(status: HttpErrorStatus, cb: CustomErrorCb<T, A>) {
+  error<A extends {}>(status: HttpErrorStatus, cb: CustomErrorCb<TRequest, A>) {
     this.#customErrorCbs[httpErrors[status]] = cb;
     // @ts-ignore
     return this as Request<
@@ -267,7 +267,7 @@ export class Request<
   async json<T extends unknown>(): Promise<
     Result.Result<
       T,
-      | AspiError
+      | AspiError<TRequest>
       | (Opts extends { notFound: any } ? Opts['notFound'] : never)
       | (Opts extends { unauthorised: any } ? Opts['unauthorised'] : never)
       | (Opts extends { forbidden: any } ? Opts['forbidden'] : never)
@@ -335,9 +335,9 @@ export class Request<
     }
   }
 
-  #request(): ErrorRequest {
+  #request(): ErrorRequest<TRequest> {
     return {
-      ...this.#localRequestInit,
+      requestInit: this.#localRequestInit as unknown as TRequest,
       baseUrl: this.#baseUrl,
       path: this.#path,
     };

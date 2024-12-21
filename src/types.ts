@@ -1,8 +1,8 @@
 import type { ErrorRequest, ErrorResponse } from './error';
 
 export type AspiRequestConfig = Pick<RequestInit, 'headers' | 'mode'>;
-export type CustomErrorCb<T, A extends {}> = (input: {
-  request: ErrorRequest;
+export type CustomErrorCb<T extends RequestInit, A extends {}> = (input: {
+  request: ErrorRequest<T>;
   response: ErrorResponse;
 }) => A;
 

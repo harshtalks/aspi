@@ -22,9 +22,10 @@ export interface ErrorResponse {
  * @property {string} baseUrl - The base URL for the request
  * @property {string} path - The path to append to the base URL
  */
-export interface ErrorRequest extends RequestInit {
+export interface ErrorRequest<T extends RequestInit> {
   baseUrl: string;
   path: string;
+  requestInit: T;
 }
 
 /**
@@ -35,9 +36,9 @@ export interface ErrorRequest extends RequestInit {
  * @property {ErrorRequest} request - The original request configuration
  * @property {ErrorResponse} response - The error response details
  */
-export class AspiError extends Error {
+export class AspiError<TReq extends RequestInit> extends Error {
   tag = 'ASPI_ERROR' as const;
-  request: ErrorRequest;
+  request: ErrorRequest<TReq>;
   response: ErrorResponse;
 
   /**
@@ -46,7 +47,11 @@ export class AspiError extends Error {
    * @param {ErrorRequest} request - The request configuration
    * @param {ErrorResponse} response - The error response
    */
-  constructor(message: string, request: ErrorRequest, response: ErrorResponse) {
+  constructor(
+    message: string,
+    request: ErrorRequest<TReq>,
+    response: ErrorResponse,
+  ) {
     super(message);
     this.request = request;
     this.response = response;
@@ -61,7 +66,7 @@ export class AspiError extends Error {
    */
   ifMatch<T>(
     status: HttpErrorStatus,
-    cb: (args: { request: ErrorRequest; response: ErrorResponse }) => T,
+    cb: (args: { request: ErrorRequest<TReq>; response: ErrorResponse }) => T,
   ) {
     if (this.response.statusText === status) {
       return cb({
