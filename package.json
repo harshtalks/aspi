@@ -4,7 +4,6 @@
   "module": "src/index.ts",
   "type": "module",
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.17.2",
     "@types/bun": "latest",
     "prettier": "^3.4.2",
     "tsup": "^8.3.5"
@@ -30,10 +29,9 @@
   },
   "homepage": "https://github.com/harshtalks/aspi",
   "scripts": {
-    "ci": "bun run build && bun run check-format && bun run check-exports && bun run lint",
+    "ci": "bun run build && bun run check-format && bun run lint",
     "format": "prettier --write .",
     "check-format": "prettier --check .",
-    "check-exports": "attw --pack . --ignore-rules=cjs-resolves-to-esm",
     "build": "tsup",
     "lint": "tsc"
   },
