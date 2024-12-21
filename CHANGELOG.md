@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.7
+
+### Patch Changes
+
+- af8b817: commit fixes
+
 ## 0.1.0-next.6
 
 ### Minor Changes
