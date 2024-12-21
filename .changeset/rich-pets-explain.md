@@ -1,0 +1,5 @@
+---
+'aspi': minor
+---
+
+zod support
