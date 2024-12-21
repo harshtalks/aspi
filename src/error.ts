@@ -1,4 +1,4 @@
-import type { HttpErrorCodes, HttpErrorStatus } from "./http";
+import type { HttpErrorCodes, HttpErrorStatus } from './http';
 
 /**
  * Error response interface for HTTP requests
@@ -36,7 +36,7 @@ export interface ErrorRequest extends RequestInit {
  * @property {ErrorResponse} response - The error response details
  */
 export class AspiError extends Error {
-  tag = "ASPI_ERROR" as const;
+  tag = 'ASPI_ERROR' as const;
   request: ErrorRequest;
   response: ErrorResponse;
 

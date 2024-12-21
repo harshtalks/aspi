@@ -74,12 +74,12 @@ export const getHttpErrorStatus = (status: HttpErrorCodes) => {
  * Valid HTTP methods as defined in the HTTP/1.1 specification.
  */
 export type HttpMethods =
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "DELETE"
-  | "HEAD"
-  | "OPTIONS"
-  | "PATCH"
-  | "TRACE"
-  | "CONNECT";
+  | 'GET'
+  | 'POST'
+  | 'PUT'
+  | 'DELETE'
+  | 'HEAD'
+  | 'OPTIONS'
+  | 'PATCH'
+  | 'TRACE'
+  | 'CONNECT';

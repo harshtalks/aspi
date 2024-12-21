@@ -4,5 +4,7 @@
   "initialVersions": {
     "aspi": "0.0.1"
   },
-  "changesets": ["twenty-wasps-grow"]
+  "changesets": [
+    "twenty-wasps-grow"
+  ]
 }

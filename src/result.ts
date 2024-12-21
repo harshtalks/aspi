@@ -1,5 +1,5 @@
-export type Ok<T> = { __tag: "ok"; value: T };
-export type Err<E> = { __tag: "err"; error: E };
+export type Ok<T> = { __tag: 'ok'; value: T };
+export type Err<E> = { __tag: 'err'; error: E };
 
 /**
  * Represents either a successful value of type T or an error of type E
@@ -15,7 +15,7 @@ export type Result<T, E> = Ok<T> | Err<E>;
  * const result = ok(42);
  * // { __tag: "ok", value: 42 }
  */
-export const ok = <T>(value: T): Ok<T> => ({ __tag: "ok", value });
+export const ok = <T>(value: T): Ok<T> => ({ __tag: 'ok', value });
 
 /**
  * Creates a failed Result
@@ -23,7 +23,7 @@ export const ok = <T>(value: T): Ok<T> => ({ __tag: "ok", value });
  * const result = err("not found");
  * // { __tag: "err", error: "not found" }
  */
-export const err = <E>(error: E): Err<E> => ({ __tag: "err", error });
+export const err = <E>(error: E): Err<E> => ({ __tag: 'err', error });
 
 /**
  * Returns true if the result is a success
@@ -35,7 +35,7 @@ export const err = <E>(error: E): Err<E> => ({ __tag: "err", error });
  * isOk(error) // false
  */
 export const isOk = <T, E>(result: Result<T, E>): result is Ok<T> =>
-  result.__tag === "ok";
+  result.__tag === 'ok';
 
 /**
  * Returns true if the result is a failure

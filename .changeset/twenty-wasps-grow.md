@@ -1,5 +1,5 @@
 ---
-"aspi": minor
+'aspi': minor
 ---
 
 first release

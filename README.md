@@ -16,12 +16,12 @@ I made this project because I am not happy with any of the Rest API clients avai
 ## Example
 
 ```typescript
-import { aspi, Result } from "aspi";
+import { aspi, Result } from 'aspi';
 
 const apiClient = new Aspi({
-  baseUrl: "https://api.example.com",
+  baseUrl: 'https://api.example.com',
   headers: {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   },
 });
 
@@ -29,7 +29,7 @@ const getTodos = async (id: number) => {
   const response = await apiClient
     .get(`/todos/${id}`)
     .notFound(() => ({
-      message: "Todo not found",
+      message: 'Todo not found',
     }))
     .json<{
       id: number;
@@ -42,9 +42,9 @@ const getTodos = async (id: number) => {
       console.log(data);
     },
     onErr: (error) => {
-      if (error.tag === "ASPI_ERROR") {
+      if (error.tag === 'ASPI_ERROR') {
         console.error(error.response.status);
-      } else if (error.tag === "NOT_FOUND") {
+      } else if (error.tag === 'NOT_FOUND') {
         console.log(error.data.message);
       }
     },

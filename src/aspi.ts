@@ -1,6 +1,6 @@
-import type { HttpMethods } from "./http";
-import { Request } from "./request";
-import type { AspiConfig, AspiRequestConfig, Middleware } from "./types";
+import type { HttpMethods } from './http';
+import { Request } from './request';
+import type { AspiConfig, AspiRequestConfig, Middleware } from './types';
 
 /**
  * A class for making API requests with a base URL and configurable options
@@ -66,7 +66,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * const response = await api.get('/users').json();
    */
   get(path: string) {
-    return this.#createRequest("GET", path);
+    return this.#createRequest('GET', path);
   }
 
   /**
@@ -79,7 +79,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * const response = await api.post('/users', { name: 'John' }).json();
    */
   post(path: string, body?: BodyInit) {
-    return this.#createRequest("POST", path, body);
+    return this.#createRequest('POST', path, body);
   }
 
   /**
@@ -92,7 +92,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * const response = await api.put('/users/1', { name: 'John' }).json();
    */
   put(path: string, body?: BodyInit) {
-    return this.#createRequest("PUT", path, body);
+    return this.#createRequest('PUT', path, body);
   }
 
   /**
@@ -105,7 +105,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * const response = await api.patch('/users/1', { name: 'John' }).json();
    */
   patch(path: string, body?: BodyInit) {
-    return this.#createRequest("PATCH", path, body);
+    return this.#createRequest('PATCH', path, body);
   }
 
   /**
@@ -117,7 +117,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * const response = await api.delete('/users/1').json();
    */
   delete(path: string) {
-    return this.#createRequest("DELETE", path);
+    return this.#createRequest('DELETE', path);
   }
 
   /**
@@ -129,7 +129,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * const response = await api.head('/users').json();
    */
   head(path: string) {
-    return this.#createRequest("HEAD", path);
+    return this.#createRequest('HEAD', path);
   }
 
   /**
@@ -141,7 +141,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * const response = await api.options('/users').json();
    */
   options(path: string) {
-    return this.#createRequest("OPTIONS", path);
+    return this.#createRequest('OPTIONS', path);
   }
 
   /**
@@ -186,7 +186,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * api.setBearer('myAuthToken123');
    */
   setBearer(token: string) {
-    return this.setHeader("Authorization", `Bearer ${token}`);
+    return this.setHeader('Authorization', `Bearer ${token}`);
   }
 
   /**

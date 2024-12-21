@@ -3,16 +3,16 @@ import {
   type CustomError,
   type ErrorRequest,
   type ErrorResponse,
-} from "./error";
+} from './error';
 import {
   getHttpErrorStatus,
   httpErrors,
   type HttpErrorCodes,
   type HttpErrorStatus,
   type HttpMethods,
-} from "./http";
-import type { AspiConfig, CustomErrorCb, Middleware } from "./types";
-import * as Result from "./result";
+} from './http';
+import type { AspiConfig, CustomErrorCb, Middleware } from './types';
+import * as Result from './result';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -117,7 +117,7 @@ export class Request<
    * request.setBearer('my-auth-token');
    */
   setBearer(token: string) {
-    return this.setHeader("Authorization", `Bearer ${token}`);
+    return this.setHeader('Authorization', `Bearer ${token}`);
   }
 
   body<Body extends {}>(body: Body) {
@@ -149,8 +149,8 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, "notFound"> & {
-        notFound: CustomError<"NOT_FOUND", A>;
+      Omit<Opts, 'notFound'> & {
+        notFound: CustomError<'NOT_FOUND', A>;
       }
     >;
   }
@@ -172,8 +172,8 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, "unauthorised"> & {
-        unauthorised: CustomError<"UNAUTHORIZED", A>;
+      Omit<Opts, 'unauthorised'> & {
+        unauthorised: CustomError<'UNAUTHORIZED', A>;
       }
     >;
   }
@@ -195,8 +195,8 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, "forbidden"> & {
-        forbidden: CustomError<"FORBIDDEN", A>;
+      Omit<Opts, 'forbidden'> & {
+        forbidden: CustomError<'FORBIDDEN', A>;
       }
     >;
   }
@@ -268,10 +268,10 @@ export class Request<
     Result.Result<
       T,
       | AspiError
-      | (Opts extends { notFound: any } ? Opts["notFound"] : never)
-      | (Opts extends { unauthorised: any } ? Opts["unauthorised"] : never)
-      | (Opts extends { forbidden: any } ? Opts["forbidden"] : never)
-      | (Opts extends { httpError: any } ? Opts["httpError"] : never)
+      | (Opts extends { notFound: any } ? Opts['notFound'] : never)
+      | (Opts extends { unauthorised: any } ? Opts['unauthorised'] : never)
+      | (Opts extends { forbidden: any } ? Opts['forbidden'] : never)
+      | (Opts extends { httpError: any } ? Opts['httpError'] : never)
     >
   > {
     try {
@@ -283,8 +283,8 @@ export class Request<
       const response = await fetch(
         [
           new URL(this.#path, this.#baseUrl).toString(),
-          this.#queryParams ? `?${this.#queryParams.toString()}` : "",
-        ].join(""),
+          this.#queryParams ? `?${this.#queryParams.toString()}` : '',
+        ].join(''),
         requestInit,
       );
 
@@ -324,11 +324,11 @@ export class Request<
     } catch (error) {
       return Result.err(
         new AspiError(
-          error instanceof Error ? error.message : "Something went wrong",
+          error instanceof Error ? error.message : 'Something went wrong',
           this.#request(),
           {
             status: 500,
-            statusText: "INTERNAL_SERVER_ERROR",
+            statusText: 'INTERNAL_SERVER_ERROR',
           },
         ),
       );
