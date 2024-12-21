@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.4
+
+### Minor Changes
+
+- 3ca04b6: this.request to obtain request
+
 ## 0.1.0-next.3
 
 ### Minor Changes
