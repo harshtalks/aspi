@@ -295,7 +295,7 @@ export class Request<
       if (!response.ok) {
         if (response.status in this.#customErrorCbs) {
           const result = this.#customErrorCbs[response.status]({
-            request: requestInit,
+            request: this.#request(),
             response: {
               response: response,
               status: response.status as HttpErrorCodes,
