@@ -1,8 +1,8 @@
 import {
   AspiError,
   type CustomError,
-  type ErrorRequest,
-  type ErrorResponse,
+  type AspiRequest,
+  type AspiResponse,
 } from './error';
 import {
   getHttpErrorStatus,
@@ -11,7 +11,12 @@ import {
   type HttpErrorStatus,
   type HttpMethods,
 } from './http';
-import type { AspiConfig, CustomErrorCb, Middleware } from './types';
+import type {
+  AspiConfig,
+  BaseSchema,
+  CustomErrorCb,
+  Middleware,
+} from './types';
 import * as Result from './result';
 
 /**
@@ -47,6 +52,7 @@ export class Request<
   > = {};
   #queryParams?: URLSearchParams;
   #middlewares: Middleware<TRequest, TRequest>[];
+  #schema: BaseSchema | null = null;
 
   constructor(
     method: HttpMethods,
@@ -128,7 +134,7 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Opts & {
+      Omit<Opts, 'body'> & {
         body: Body;
       }
     >;
@@ -221,7 +227,7 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Opts & {
+      Omit<Opts, 'httpError'> & {
         httpError: CustomError<HttpErrorStatus, A>;
       }
     >;
@@ -244,8 +250,42 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Opts & {
+      Omit<Opts, 'queryParams'> & {
         qyeryParams: T;
+      }
+    >;
+  }
+
+  /**
+   * Sets the output schema for validating the response data using Zod.
+   * @param schema The Zod schema to validate the response
+   * @returns The request instance for chaining
+   * @example
+   * import { z } from 'zod';
+   *
+   * const userSchema = z.object({
+   *   id: z.number(),
+   *   name: z.string(),
+   *   email: z.string().email()
+   * });
+   *
+   * const request = new Request('/users', config);
+   * const result = await request
+   *   .output(userSchema)
+   *   .json();
+   *
+   * if (result.ok) {
+   *   const user = result.value; // Typed and validated user data
+   * }
+   */
+  output<Output extends BaseSchema>(schema: Output) {
+    this.#schema = schema;
+    // @ts-ignore
+    return this as Request<
+      Method,
+      TRequest,
+      Omit<Opts, 'output'> & {
+        output: Output;
       }
     >;
   }
@@ -266,7 +306,7 @@ export class Request<
    *   console.error(result.error); // Error handling
    * }
    */
-  async json<T extends unknown>(): Promise<
+  async json<T extends Opts['output']['_output']>(): Promise<
     Result.Result<
       T,
       | AspiError<TRequest>
@@ -301,7 +341,7 @@ export class Request<
               status: response.status as HttpErrorCodes,
               statusText: getHttpErrorStatus(response.status as HttpErrorCodes),
               responseData,
-            } as ErrorResponse,
+            } as AspiResponse,
           });
 
           return Result.err({
@@ -320,6 +360,10 @@ export class Request<
         );
       }
 
+      if (this.#schema) {
+        return Result.ok(this.#schema.parse(responseData) as T);
+      }
+
       return Result.ok(responseData as T);
     } catch (error) {
       return Result.err(
@@ -335,7 +379,7 @@ export class Request<
     }
   }
 
-  #request(): ErrorRequest<TRequest> {
+  #request(): AspiRequest<TRequest> {
     let requestInit = this.#localRequestInit;
     for (const middleware of this.#middlewares) {
       this.#localRequestInit = middleware(this.#localRequestInit);
@@ -344,6 +388,7 @@ export class Request<
       requestInit: requestInit as unknown as TRequest,
       baseUrl: this.#baseUrl,
       path: this.#path,
+      queryParams: this.#queryParams || null,
     };
   }
 }

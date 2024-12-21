@@ -1,9 +1,9 @@
-import type { ErrorRequest, ErrorResponse } from './error';
+import type { AspiRequest, AspiResponse } from './error';
 
 export type AspiRequestConfig = Pick<RequestInit, 'headers' | 'mode'>;
 export type CustomErrorCb<T extends RequestInit, A extends {}> = (input: {
-  request: ErrorRequest<T>;
-  response: ErrorResponse;
+  request: AspiRequest<T>;
+  response: AspiResponse;
 }) => A;
 
 export type Middleware<T extends RequestInit, U extends RequestInit> = (
@@ -12,4 +12,9 @@ export type Middleware<T extends RequestInit, U extends RequestInit> = (
 
 export interface AspiConfig extends RequestInit {
   baseUrl: string;
+}
+
+export interface BaseSchema {
+  parse: (input: unknown) => unknown;
+  _output: unknown;
 }
