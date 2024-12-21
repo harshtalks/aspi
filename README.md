@@ -53,3 +53,43 @@ const getTodos = async (id: number) => {
 
 getTodos(1);
 ```
+
+
+## Example with Schema Validation (with Zod)
+
+```typescript
+import { aspi, Result } from 'aspi';
+import { z, ZodError } from 'zod';
+
+// JSON Placeholder API Client
+const apiClient = new Aspi({
+  baseUrl: 'https://jsonplaceholder.typicode.com',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+const getTodo = async (id: number) => {
+  const response = await apiClient
+    .get(`/todos/${id}`)
+    .output(z.object({
+      id: z.number(),
+      title: z.string(),
+      completed: z.boolean(),
+    }))
+    .json();
+
+  Result.match(response, {
+    onOk: (data) => {
+      console.log(data);
+    },
+    onErr: err => {
+      if(err.tag === "parseError"){
+        const error = err.data as ZodError;
+        console.error(error.errors);
+      }else {
+        // do something else
+      }
+    }
+  })
+}
