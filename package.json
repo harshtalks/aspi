@@ -4,7 +4,10 @@
   "module": "src/index.ts",
   "type": "module",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@arethetypeswrong/cli": "^0.17.2",
+    "@types/bun": "latest",
+    "prettier": "^3.4.2",
+    "tsup": "^8.3.5"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
@@ -13,5 +16,32 @@
     "email": "harshpareek91@gmai.com",
     "name": "Harsh Pareek",
     "url": "https://hrshwrites.vercel.app"
+  },
+  "keywords": [
+    "fetch",
+    "rest",
+    "axios",
+    "request"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harshtalks/aspi.git"
+  },
+  "homepage": "https://github.com/harshtalks/aspi",
+  "scripts": {
+    "ci": "bun run build && bun run check-format && bun run check-exports && bun run lint",
+    "format": "prettier --write .",
+    "check-format": "prettier --check .",
+    "check-exports": "attw --pack . --ignore-rules=cjs-resolves-to-esm",
+    "build": "tsup",
+    "lint": "tsc"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": "./dist/index.js",
+      "default": "./dist/index.cjs"
+    }
   }
 }
