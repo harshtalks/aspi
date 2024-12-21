@@ -286,6 +286,7 @@ export class Request<
       TRequest,
       Omit<Opts, 'output'> & {
         output: Output;
+        parseError: CustomError<'parseError', unknown>;
       }
     >;
   }
@@ -314,6 +315,7 @@ export class Request<
       | (Opts extends { unauthorised: any } ? Opts['unauthorised'] : never)
       | (Opts extends { forbidden: any } ? Opts['forbidden'] : never)
       | (Opts extends { httpError: any } ? Opts['httpError'] : never)
+      | (Opts extends { parseError: any } ? Opts['parseError'] : never)
     >
   > {
     try {
@@ -361,7 +363,14 @@ export class Request<
       }
 
       if (this.#schema) {
-        return Result.ok(this.#schema.parse(responseData) as T);
+        try {
+          return Result.ok(this.#schema.parse(responseData) as T);
+        } catch (error) {
+          return Result.err({
+            data: error,
+            tag: 'parseError',
+          }) as Result.Result<T, Opts['parseError']>;
+        }
       }
 
       return Result.ok(responseData as T);
