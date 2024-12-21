@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.6
+
+### Minor Changes
+
+- 05c98f1: zod support
+
 ## 0.1.0-next.5
 
 ### Minor Changes
