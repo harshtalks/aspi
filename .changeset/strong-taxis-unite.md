@@ -1,0 +1,5 @@
+---
+'aspi': patch
+---
+
+updated jsdocc
