@@ -38,7 +38,7 @@ export interface AspiRequest<T extends RequestInit> {
  * @property {AspiResponse} response - The error response details
  */
 export class AspiError<TReq extends RequestInit> extends Error {
-  tag = 'ASPI_ERROR' as const;
+  tag = 'aspiError' as const;
   request: AspiRequest<TReq>;
   response: AspiResponse;
 
@@ -78,7 +78,7 @@ export class AspiError<TReq extends RequestInit> extends Error {
   }
 }
 
-export interface CustomError<Tag extends HttpErrorStatus | (string & {}), A> {
+export interface CustomError<Tag extends string, A> {
   tag: Tag;
   data: A;
 }

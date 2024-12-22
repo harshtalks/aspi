@@ -1,6 +1,6 @@
 import type { HttpMethods } from './http';
 import { Request } from './request';
-import type { AspiConfig, AspiRequestConfig, Middleware } from './types';
+import type { AspiConfig, AspiRequestInit, Middleware } from './types';
 
 /**
  * A class for making API requests with a base URL and configurable options
@@ -17,14 +17,12 @@ import type { AspiConfig, AspiRequestConfig, Middleware } from './types';
  * const users = await api.get('/users').json();
  * const user = await api.post('/users', { name: 'John' }).json();
  */
-export class Aspi<TRequest extends RequestInit = RequestInit> {
-  #baseUrl: string;
-  #globalRequestInit: AspiRequestConfig = {};
+export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
+  #globalRequestInit: TRequest;
   #middlewares: Middleware<TRequest, TRequest>[] = [];
 
   constructor(config: AspiConfig) {
-    this.#baseUrl = config.baseUrl;
-    this.#globalRequestInit = config;
+    this.#globalRequestInit = config as TRequest;
   }
 
   /**
@@ -36,7 +34,7 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * api.setBaseUrl('https://api.newdomain.com');
    */
   setBaseUrl(url: string) {
-    this.#baseUrl = url;
+    this.#globalRequestInit.baseUrl = url;
     return this;
   }
 
@@ -49,7 +47,6 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
       method,
       path,
       {
-        baseUrl: this.#baseUrl,
         ...this.#globalRequestInit,
         ...(body ? { body: JSON.stringify(body) } : { body: null }),
         method,
@@ -206,10 +203,6 @@ export class Aspi<TRequest extends RequestInit = RequestInit> {
    * });
    */
   use<T extends TRequest, U extends TRequest>(fn: Middleware<T, U>): Aspi<U> {
-    const aspi = new Aspi({
-      ...this.#globalRequestInit,
-      baseUrl: this.#baseUrl,
-    });
     this.#middlewares = [...this.#middlewares, fn as any];
     return this as unknown as Aspi<U>;
   }

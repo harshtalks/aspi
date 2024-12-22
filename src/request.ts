@@ -12,7 +12,7 @@ import {
   type HttpMethods,
 } from './http';
 import type {
-  AspiConfig,
+  AspiRequestInit,
   BaseSchema,
   CustomErrorCb,
   Middleware,
@@ -40,10 +40,11 @@ import * as Result from './result';
  */
 export class Request<
   Method extends HttpMethods,
-  TRequest extends RequestInit = RequestInit,
-  Opts extends Record<any, any> = {},
+  TRequest extends AspiRequestInit = AspiRequestInit,
+  Opts extends Record<any, any> = {
+    httpError: {};
+  },
 > {
-  #baseUrl: string;
   #path: string;
   #localRequestInit: TRequest;
   #customErrorCbs: Record<
@@ -57,17 +58,12 @@ export class Request<
   constructor(
     method: HttpMethods,
     path: string,
-    config: AspiConfig,
+    config: TRequest,
     middlewares: Middleware<TRequest, TRequest>[] = [],
   ) {
     this.#path = path;
-    this.#baseUrl = config.baseUrl;
     this.#middlewares = middlewares;
-    this.#localRequestInit = {
-      headers: config.headers,
-      mode: config.mode,
-      method: method,
-    } as TRequest;
+    this.#localRequestInit = { ...config, method: method } as TRequest;
   }
 
   /**
@@ -79,7 +75,7 @@ export class Request<
    * request.setBaseUrl('https://api.example.com');
    */
   setBaseUrl(url: string) {
-    this.#baseUrl = url;
+    this.#localRequestInit.baseUrl = url;
     return this;
   }
 
@@ -158,7 +154,7 @@ export class Request<
       Method,
       TRequest,
       Omit<Opts, 'notFound'> & {
-        notFound: CustomError<'NOT_FOUND', A>;
+        notFound: CustomError<'notFoundError', A>;
       }
     >;
   }
@@ -181,7 +177,7 @@ export class Request<
       Method,
       TRequest,
       Omit<Opts, 'unauthorised'> & {
-        unauthorised: CustomError<'UNAUTHORIZED', A>;
+        unauthorised: CustomError<'unauthorisedError', A>;
       }
     >;
   }
@@ -204,7 +200,7 @@ export class Request<
       Method,
       TRequest,
       Omit<Opts, 'forbidden'> & {
-        forbidden: CustomError<'FORBIDDEN', A>;
+        forbidden: CustomError<'forbiddenError', A>;
       }
     >;
   }
@@ -221,14 +217,18 @@ export class Request<
    *   return { message: 'Invalid input provided' };
    * });
    */
-  error<A extends {}>(status: HttpErrorStatus, cb: CustomErrorCb<TRequest, A>) {
+  error<Tag extends string, A extends {}>(
+    _tag: Tag,
+    status: HttpErrorStatus,
+    cb: CustomErrorCb<TRequest, A>,
+  ) {
     this.#customErrorCbs[httpErrors[status]] = cb;
     // @ts-ignore
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'httpError'> & {
-        httpError: CustomError<HttpErrorStatus, A>;
+      Opts & {
+        httpError: Opts['httpError'] & { [K in Tag]: CustomError<Tag, A> };
       }
     >;
   }
@@ -274,7 +274,7 @@ export class Request<
    *   .output(userSchema)
    *   .json();
    *
-   * if (result.ok) {
+   * if (Result.isOk(result)) {
    *   const user = result.value; // Typed and validated user data
    * }
    */
@@ -301,7 +301,7 @@ export class Request<
    *   .notFound((error) => ({ message: 'User not found' }))
    *   .json<User>();
    *
-   * if (result.ok) {
+   * if (Result.isOk(result)) {
    *   const user = result.value; // User data
    * } else {
    *   console.error(result.error); // Error handling
@@ -314,8 +314,10 @@ export class Request<
       | (Opts extends { notFound: any } ? Opts['notFound'] : never)
       | (Opts extends { unauthorised: any } ? Opts['unauthorised'] : never)
       | (Opts extends { forbidden: any } ? Opts['forbidden'] : never)
-      | (Opts extends { httpError: any } ? Opts['httpError'] : never)
       | (Opts extends { parseError: any } ? Opts['parseError'] : never)
+      | (Opts extends { httpError: any }
+          ? Opts['httpError'][keyof Opts['httpError']]
+          : never)
     >
   > {
     try {
@@ -324,7 +326,7 @@ export class Request<
 
       const response = await fetch(
         [
-          new URL(this.#path, this.#baseUrl).toString(),
+          new URL(this.#path, this.#localRequestInit.baseUrl).toString(),
           this.#queryParams ? `?${this.#queryParams.toString()}` : '',
         ].join(''),
         requestInit,
@@ -395,7 +397,7 @@ export class Request<
     }
     return {
       requestInit: requestInit as unknown as TRequest,
-      baseUrl: this.#baseUrl,
+      baseUrl: this.#localRequestInit.baseUrl,
       path: this.#path,
       queryParams: this.#queryParams || null,
     };
