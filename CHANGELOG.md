@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.11
+
+### Patch Changes
+
+- 4b7b60d: updated jsdocc
+
 ## 0.1.0-next.10
 
 ### Minor Changes
