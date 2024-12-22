@@ -206,19 +206,30 @@ export class Request<
   }
 
   /**
-   * Handles HTTP errors with a custom callback.
+   * Sets a custom error handler for a specific HTTP status code.
+   * @param tag A string identifier for the error type
    * @param status The HTTP error status to handle
    * @param cb The callback function to handle the error
    * @returns The request instance for chaining
    * @example
    * const request = new Request('/users', config);
-   * request.error('BAD_REQUEST', (error) => {
-   *   console.log('Bad request:', error);
-   *   return { message: 'Invalid input provided' };
+   * request.error('customError', 'BAD_REQUEST', (error) => {
+   *   console.log('Bad request error:', error);
+   *   return {
+   *     message: 'Invalid input',
+   *     details: error.response.responseData
+   *   };
    * });
+   *
+   * // Later when making the request:
+   * const result = await request.json();
+   * if (Result.isErr(result)) {
+   *   if(result.tag === 'customError') {
+   *   console.log(result.error.data.message); // 'Invalid input'
+   * }
    */
   error<Tag extends string, A extends {}>(
-    _tag: Tag,
+    tag: Tag,
     status: HttpErrorStatus,
     cb: CustomErrorCb<TRequest, A>,
   ) {
