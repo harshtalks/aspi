@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.12
+
+### Minor Changes
+
+- 2b59531: body as input
+
 ## 0.1.0-next.11
 
 ### Patch Changes
