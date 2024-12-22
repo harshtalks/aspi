@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.10
+
+### Minor Changes
+
+- fc8a8e6: types fix for custom error
+
 ## 0.1.0-next.9
 
 ### Patch Changes
