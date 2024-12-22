@@ -48,8 +48,8 @@ export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
       path,
       {
         ...this.#globalRequestInit,
-        ...(body ? { body: JSON.stringify(body) } : { body: null }),
         method,
+        body: body,
       },
       this.#middlewares,
     );

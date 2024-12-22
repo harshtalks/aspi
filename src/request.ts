@@ -124,14 +124,50 @@ export class Request<
     return this.setHeader('Authorization', `Bearer ${token}`);
   }
 
-  body<Body extends {}>(body: Body) {
+  /**
+   * Sets the request body as JSON by automatically stringifying the provided object.
+   * @param body The object to be stringified and sent as the request body
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.bodyJson({
+   *   name: 'John Doe',
+   *   email: 'john@example.com',
+   *   age: 30
+   * });
+   */
+  bodyJson<Body extends {}>(body: Body) {
     this.#localRequestInit.body = JSON.stringify(body);
-    // @ts-ignore
     return this as Request<
       Method,
       TRequest,
       Omit<Opts, 'body'> & {
         body: Body;
+      }
+    >;
+  }
+
+  /**
+   * Sets the raw request body.
+   * @param body The body content to send with the request
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.body(new FormData());
+   *
+   * // or with raw text
+   * request.body('Hello World');
+   *
+   * // or with URLSearchParams
+   * request.body(new URLSearchParams({ key: 'value' }));
+   */
+  body(body: BodyInit) {
+    this.#localRequestInit.body = body;
+    return this as Request<
+      Method,
+      TRequest,
+      Omit<Opts, 'body'> & {
+        body: BodyInit;
       }
     >;
   }
