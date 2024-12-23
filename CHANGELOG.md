@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.14
+
+### Minor Changes
+
+- 27be8ee: text api
+
 ## 0.1.0-next.13
 
 ### Minor Changes
