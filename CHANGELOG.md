@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.13
+
+### Minor Changes
+
+- 646936b: simplfied error tag mgmt
+
 ## 0.1.0-next.12
 
 ### Minor Changes
