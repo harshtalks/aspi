@@ -49,7 +49,10 @@ export class Request<
   #localRequestInit: TRequest;
   #customErrorCbs: Record<
     number,
-    (input: { request: any; response: any }) => any
+    {
+      cb: (input: { request: any; response: any }) => any;
+      tag: unknown;
+    }
   > = {};
   #queryParams?: URLSearchParams;
   #middlewares: Middleware<TRequest, TRequest>[];
@@ -184,13 +187,18 @@ export class Request<
    * });
    */
   notFound<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
-    this.#customErrorCbs[404] = cb;
+    this.#customErrorCbs[404] = {
+      cb,
+      tag: 'notFoundError',
+    };
     // @ts-ignore
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'notFound'> & {
-        notFound: CustomError<'notFoundError', A>;
+      Opts & {
+        httpError: Opts['httpError'] & {
+          notFound: CustomError<'notFoundError', A>;
+        };
       }
     >;
   }
@@ -207,13 +215,18 @@ export class Request<
    * });
    */
   unauthorised<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
-    this.#customErrorCbs[401] = cb;
+    this.#customErrorCbs[401] = {
+      cb,
+      tag: 'unauthorisedError',
+    };
     // @ts-ignore
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'unauthorised'> & {
-        unauthorised: CustomError<'unauthorisedError', A>;
+      Opts & {
+        httpError: Opts['httpError'] & {
+          unauthorised: CustomError<'unauthorisedError', A>;
+        };
       }
     >;
   }
@@ -230,13 +243,18 @@ export class Request<
    * });
    */
   forbidden<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
-    this.#customErrorCbs[403] = cb;
+    this.#customErrorCbs[403] = {
+      cb,
+      tag: 'forbiddenError',
+    };
     // @ts-ignore
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'forbidden'> & {
-        forbidden: CustomError<'forbiddenError', A>;
+      Opts & {
+        httpError: Opts['httpError'] & {
+          forbidden: CustomError<'forbiddenError', A>;
+        };
       }
     >;
   }
@@ -269,7 +287,10 @@ export class Request<
     status: HttpErrorStatus,
     cb: CustomErrorCb<TRequest, A>,
   ) {
-    this.#customErrorCbs[httpErrors[status]] = cb;
+    this.#customErrorCbs[httpErrors[status]] = {
+      cb,
+      tag,
+    };
     // @ts-ignore
     return this as Request<
       Method,
@@ -333,7 +354,9 @@ export class Request<
       TRequest,
       Omit<Opts, 'output'> & {
         output: Output;
-        parseError: CustomError<'parseError', unknown>;
+        httpError: Opts['httpError'] & {
+          parseError: CustomError<'parseError', unknown>;
+        };
       }
     >;
   }
@@ -358,10 +381,6 @@ export class Request<
     Result.Result<
       T,
       | AspiError<TRequest>
-      | (Opts extends { notFound: any } ? Opts['notFound'] : never)
-      | (Opts extends { unauthorised: any } ? Opts['unauthorised'] : never)
-      | (Opts extends { forbidden: any } ? Opts['forbidden'] : never)
-      | (Opts extends { parseError: any } ? Opts['parseError'] : never)
       | (Opts extends { httpError: any }
           ? Opts['httpError'][keyof Opts['httpError']]
           : never)
@@ -385,7 +404,7 @@ export class Request<
 
       if (!response.ok) {
         if (response.status in this.#customErrorCbs) {
-          const result = this.#customErrorCbs[response.status]({
+          const result = this.#customErrorCbs[response.status].cb({
             request: this.#request(),
             response: {
               response: response,
@@ -395,10 +414,11 @@ export class Request<
             } as AspiResponse,
           });
 
+          // @ts-ignore
           return Result.err({
             data: result,
-            tag: getHttpErrorStatus(response.status as HttpErrorCodes),
-          } as Opts[HttpErrorStatus]);
+            tag: this.#customErrorCbs[response.status].tag,
+          });
         }
 
         return Result.err(
@@ -424,6 +444,22 @@ export class Request<
 
       return Result.ok(responseData as T);
     } catch (error) {
+      if (500 in this.#customErrorCbs) {
+        const result = this.#customErrorCbs[500].cb({
+          request: this.#request(),
+          response: {
+            status: 500,
+            statusText: 'INTERNAL_SERVER_ERROR',
+          } as AspiResponse,
+        });
+
+        // @ts-ignore
+        return Result.err({
+          data: result,
+          tag: this.#customErrorCbs[500].tag,
+        });
+      }
+
       return Result.err(
         new AspiError(
           error instanceof Error ? error.message : 'Something went wrong',
