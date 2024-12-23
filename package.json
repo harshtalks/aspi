@@ -8,7 +8,8 @@
     "@changesets/cli": "^2.27.11",
     "@types/bun": "latest",
     "prettier": "^3.4.2",
-    "tsup": "^8.3.5"
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
@@ -37,7 +38,8 @@
     "build": "tsup",
     "lint": "tsc",
     "local-release": "changeset version && changeset publish",
-    "prepublishOnly": "bun run ci"
+    "prepublishOnly": "bun run ci",
+    "test": "vitest"
   },
   "exports": {
     "./package.json": "./package.json",

@@ -196,7 +196,7 @@ export class Request<
       Method,
       TRequest,
       Opts & {
-        httpError: Opts['httpError'] & {
+        error: Opts['error'] & {
           notFound: CustomError<'notFoundError', A>;
         };
       }
@@ -224,7 +224,7 @@ export class Request<
       Method,
       TRequest,
       Opts & {
-        httpError: Opts['httpError'] & {
+        error: Opts['error'] & {
           unauthorised: CustomError<'unauthorisedError', A>;
         };
       }
@@ -252,7 +252,7 @@ export class Request<
       Method,
       TRequest,
       Opts & {
-        httpError: Opts['httpError'] & {
+        error: Opts['error'] & {
           forbidden: CustomError<'forbiddenError', A>;
         };
       }
@@ -296,7 +296,7 @@ export class Request<
       Method,
       TRequest,
       Opts & {
-        httpError: Opts['httpError'] & { [K in Tag]: CustomError<Tag, A> };
+        error: Opts['error'] & { [K in Tag]: CustomError<Tag, A> };
       }
     >;
   }
@@ -354,7 +354,7 @@ export class Request<
       TRequest,
       Omit<Opts, 'output'> & {
         output: Output;
-        httpError: Opts['httpError'] & {
+        error: Opts['error'] & {
           parseError: CustomError<'parseError', unknown>;
         };
       }
@@ -381,15 +381,14 @@ export class Request<
     Result.Result<
       T,
       | AspiError<TRequest>
-      | (Opts extends { httpError: any }
-          ? Opts['httpError'][keyof Opts['httpError']]
+      | (Opts extends { error: any }
+          ? Opts['error'][keyof Opts['error']]
           : never)
     >
   > {
+    const request = this.#request();
     try {
-      const request = this.#request();
       const requestInit = request.requestInit;
-
       const response = await fetch(
         [
           new URL(this.#path, this.#localRequestInit.baseUrl).toString(),
@@ -398,14 +397,14 @@ export class Request<
         requestInit,
       );
 
-      const responseData = await response.json().catch(() => ({
-        message: response.statusText,
+      const responseData = await response.json().catch((e) => ({
+        message: e instanceof Error ? e.message : 'Failed to parse JSON',
       }));
 
       if (!response.ok) {
         if (response.status in this.#customErrorCbs) {
           const result = this.#customErrorCbs[response.status].cb({
-            request: this.#request(),
+            request,
             response: {
               response: response,
               status: response.status as HttpErrorCodes,
@@ -446,7 +445,105 @@ export class Request<
     } catch (error) {
       if (500 in this.#customErrorCbs) {
         const result = this.#customErrorCbs[500].cb({
-          request: this.#request(),
+          request: request,
+          response: {
+            status: 500,
+            statusText: 'INTERNAL_SERVER_ERROR',
+          },
+        });
+
+        // @ts-ignore
+        return Result.err({
+          data: result,
+          tag: this.#customErrorCbs[500].tag,
+        });
+      }
+
+      return Result.err(
+        new AspiError(
+          error instanceof Error ? error.message : 'Something went wrong',
+          request,
+          {
+            status: 500,
+            statusText: 'INTERNAL_SERVER_ERROR',
+          },
+        ),
+      );
+    }
+  }
+
+  /**
+   * Executes the request and returns the response as plain text.
+   * @returns A Promise containing the Result type with either successful text data or error information
+   * @example
+   * const request = new Request('/data.txt', config);
+   * const result = await request
+   *   .setQueryParams({ version: '1' })
+   *   .notFound((error) => ({ message: 'Text file not found' }))
+   *   .text();
+   *
+   * if (Result.isOk(result)) {
+   *   const text = result.value; // Plain text content
+   * } else {
+   *   console.error(result.error); // Error handling
+   * }
+   */
+  async text(): Promise<
+    Result.Result<
+      string,
+      | AspiError<TRequest>
+      | (Opts extends { error: any }
+          ? Opts['error'][keyof Opts['error']]
+          : never)
+    >
+  > {
+    const request = this.#request();
+    try {
+      const requestInit = request.requestInit;
+
+      const response = await fetch(
+        [
+          new URL(this.#path, this.#localRequestInit.baseUrl).toString(),
+          this.#queryParams ? `?${this.#queryParams.toString()}` : '',
+        ].join(''),
+        requestInit,
+      );
+
+      if (!response.ok) {
+        if (response.status in this.#customErrorCbs) {
+          const result = this.#customErrorCbs[response.status].cb({
+            request,
+            response: {
+              response: response,
+              status: response.status as HttpErrorCodes,
+              statusText: getHttpErrorStatus(response.status as HttpErrorCodes),
+            } as AspiResponse,
+          });
+
+          // @ts-ignore
+          return Result.err({
+            data: result,
+            tag: this.#customErrorCbs[response.status].tag,
+          });
+        }
+
+        return Result.err(
+          new AspiError(response.statusText, this.#request(), {
+            status: response.status as HttpErrorCodes,
+            statusText: getHttpErrorStatus(response.status as HttpErrorCodes),
+            response,
+            responseData: await response.text(),
+          }),
+        );
+      }
+
+      const text = await response.text();
+
+      return Result.ok(text);
+    } catch (error) {
+      if (500 in this.#customErrorCbs) {
+        const result = this.#customErrorCbs[500].cb({
+          request: request,
           response: {
             status: 500,
             statusText: 'INTERNAL_SERVER_ERROR',
@@ -463,7 +560,7 @@ export class Request<
       return Result.err(
         new AspiError(
           error instanceof Error ? error.message : 'Something went wrong',
-          this.#request(),
+          request,
           {
             status: 500,
             statusText: 'INTERNAL_SERVER_ERROR',
@@ -476,7 +573,7 @@ export class Request<
   #request(): AspiRequest<TRequest> {
     let requestInit = this.#localRequestInit;
     for (const middleware of this.#middlewares) {
-      this.#localRequestInit = middleware(this.#localRequestInit);
+      requestInit = middleware(this.#localRequestInit);
     }
     return {
       requestInit: requestInit as unknown as TRequest,
