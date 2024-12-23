@@ -1,0 +1,5 @@
+---
+'aspi': minor
+---
+
+text api
