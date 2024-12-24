@@ -60,7 +60,10 @@ export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
    * });
    */
   setRetry(retry: AspiRetryConfig<TRequest>) {
-    this.#retryConfig = retry;
+    this.#retryConfig = {
+      ...this.#retryConfig,
+      ...retry,
+    };
     return this;
   }
 

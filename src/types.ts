@@ -7,7 +7,7 @@ export type AspiConfigBase = {
 };
 
 export type AspiRetryConfig<TRequest extends AspiRequestInit> = {
-  retries: number;
+  retries?: number;
   retryDelay?:
     | number
     | ((

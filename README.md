@@ -42,9 +42,9 @@ const getTodos = async (id: number) => {
       console.log(data);
     },
     onErr: (error) => {
-      if (error.tag === 'ASPI_ERROR') {
+      if (error.tag === 'aspiError') {
         console.error(error.response.status);
-      } else if (error.tag === 'NOT_FOUND') {
+      } else if (error.tag === 'notFoundError') {
         console.log(error.data.message);
       }
     },
@@ -94,4 +94,49 @@ const getTodo = async (id: number) => {
     },
   });
 };
+```
+
+
+## Example with retry
+
+```typescript
+
+import { aspi, Result } from 'aspi';
+
+const apiClient = new Aspi({
+  baseUrl: 'https://example.com',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+}).setRetry({
+  retries: 3,
+  retryDelay: 1000,
+  // retry on 404 error
+  retryOn: [404]
+});
+
+// the given GET endpoint does not exist
+apiClient
+  .get('/todos/1')
+  .setHeader("Content-Type", "application/json")
+  // Updating retry options for this request
+  .setRetry({
+    // Exponential backoff
+    retryDelay: (attempts) => Math.pow(2, attempts) * 1000,
+  })
+  .json()
+  .then((response) => {
+    Result.match(response, {
+      onOk: (data) => {
+        console.log(data);
+      },
+      onErr: (error) => {
+        if (error.tag === 'aspiError') {
+          console.error(error.response);
+        } else if (error.tag === 'notFoundError') {
+          console.log(error.data.message);
+        }
+      },
+    });
+  });
 ```

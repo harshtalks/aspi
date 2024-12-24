@@ -99,7 +99,10 @@ export class Request<
    * });
    */
   setRetry(retry: AspiRetryConfig<TRequest>) {
-    this.#retryConfig = retry;
+    this.#retryConfig = {
+      ...this.#retryConfig,
+      ...retry,
+    };
     return this;
   }
 
