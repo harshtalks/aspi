@@ -96,11 +96,9 @@ const getTodo = async (id: number) => {
 };
 ```
 
-
 ## Example with retry
 
 ```typescript
-
 import { aspi, Result } from 'aspi';
 
 const apiClient = new Aspi({
@@ -112,13 +110,13 @@ const apiClient = new Aspi({
   retries: 3,
   retryDelay: 1000,
   // retry on 404 error
-  retryOn: [404]
+  retryOn: [404],
 });
 
 // the given GET endpoint does not exist
 apiClient
   .get('/todos/1')
-  .setHeader("Content-Type", "application/json")
+  .setHeader('Content-Type', 'application/json')
   // Updating retry options for this request
   .setRetry({
     // Exponential backoff
