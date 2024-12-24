@@ -1,4 +1,5 @@
 import type { HttpErrorCodes, HttpErrorStatus } from './http';
+import type { AspiRequestInit, AspiRetryConfig } from './types';
 
 /**
  * Error response interface for HTTP requests
@@ -22,11 +23,12 @@ export interface AspiResponse {
  * @property {string} baseUrl - The base URL for the request
  * @property {string} path - The path to append to the base URL
  */
-export interface AspiRequest<T extends RequestInit> {
+export interface AspiRequest<T extends AspiRequestInit> {
   baseUrl: string;
   path: string;
   requestInit: T;
   queryParams: URLSearchParams | null;
+  retryConfig: AspiRetryConfig<T>;
 }
 
 /**
@@ -37,7 +39,7 @@ export interface AspiRequest<T extends RequestInit> {
  * @property {AspiRe} request - The original request configuration
  * @property {AspiResponse} response - The error response details
  */
-export class AspiError<TReq extends RequestInit> extends Error {
+export class AspiError<TReq extends AspiRequestInit> extends Error {
   tag = 'aspiError' as const;
   request: AspiRequest<TReq>;
   response: AspiResponse;

@@ -1,6 +1,11 @@
 import type { HttpMethods } from './http';
 import { Request } from './request';
-import type { AspiConfig, AspiRequestInit, Middleware } from './types';
+import type {
+  AspiConfig,
+  AspiRequestInit,
+  AspiRetryConfig,
+  Middleware,
+} from './types';
 
 /**
  * A class for making API requests with a base URL and configurable options
@@ -20,9 +25,12 @@ import type { AspiConfig, AspiRequestInit, Middleware } from './types';
 export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
   #globalRequestInit: TRequest;
   #middlewares: Middleware<TRequest, TRequest>[] = [];
+  #retryConfig?: AspiRetryConfig<TRequest>;
 
   constructor(config: AspiConfig) {
-    this.#globalRequestInit = config as TRequest;
+    const { retryConfig, ...requestConfig } = config;
+    this.#globalRequestInit = requestConfig as TRequest;
+    this.#retryConfig = retryConfig as unknown as AspiRetryConfig<TRequest>;
   }
 
   /**
@@ -38,21 +46,38 @@ export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
     return this;
   }
 
+  /**
+   * Sets the retry configuration for failed requests
+   * @param {AspiRetryConfig<TRequest>} retry - The retry configuration object
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * const api = new Aspi({ baseUrl: 'https://api.example.com' });
+   * api.setRetry({
+   *   retries: 3,
+   *   retryDelay: 1000,
+   *   retryOn: [500, 502],
+   *   retryWhile: (req, res) => res.status === 500
+   * });
+   */
+  setRetry(retry: AspiRetryConfig<TRequest>) {
+    this.#retryConfig = retry;
+    return this;
+  }
+
   #createRequest<M extends HttpMethods>(
     method: M,
     path: string,
     body?: BodyInit,
   ) {
-    return new Request<M, TRequest, {}>(
-      method,
-      path,
-      {
+    return new Request<M, TRequest, {}>(method, path, {
+      requestConfig: {
         ...this.#globalRequestInit,
         method,
         body: body,
       },
-      this.#middlewares,
-    );
+      retryConfig: this.#retryConfig,
+      middlewares: this.#middlewares,
+    });
   }
 
   /**
