@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.16
+
+### Minor Changes
+
+- 0008024: partial retry config for better control
+
 ## 0.1.0-next.15
 
 ### Minor Changes
