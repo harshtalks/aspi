@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.15
+
+### Minor Changes
+
+- f614e30: retry policy
+
 ## 0.1.0-next.14
 
 ### Minor Changes
