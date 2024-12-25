@@ -20,7 +20,6 @@ import type {
   RequestOptions,
 } from './types';
 import * as Result from './result';
-import { Aspi } from './aspi';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
