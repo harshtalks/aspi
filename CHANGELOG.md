@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.17
+
+### Minor Changes
+
+- 1f32b1f: custom error for json parse failure
+
 ## 0.1.0-next.16
 
 ### Minor Changes
