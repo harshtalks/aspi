@@ -1,8 +1,9 @@
 import {
   AspiError,
-  type CustomError,
+  CustomError,
   type AspiRequest,
   type AspiResponse,
+  type JSONParseError,
 } from './error';
 import {
   getHttpErrorStatus,
@@ -408,15 +409,17 @@ export class Request<
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]
           : never)
-      | CustomError<'jsonParseError', { message: string }>
+      | JSONParseError
     >
   > {
     return this.#makeRequest<T>(async (response) =>
-      response.json().catch((e) =>
-        Result.err({
-          data: e instanceof Error ? e.message : 'Failed to parse JSON',
-          tag: 'jsonParseError',
-        }),
+      response.json().catch(
+        (e) =>
+          new CustomError('jsonParseError', {
+            data: {
+              message: e instanceof Error ? e.message : 'Failed to parse JSON',
+            },
+          }),
       ),
     );
   }
@@ -479,7 +482,13 @@ export class Request<
       while (attempts <= retries) {
         try {
           response = await fetch(url, requestInit);
+
           responseData = await responseParser(response);
+
+          if (responseData instanceof CustomError) {
+            // @ts-ignore
+            return Result.err(responseData);
+          }
 
           if (
             response.ok ||
@@ -511,10 +520,13 @@ export class Request<
             });
 
             // @ts-ignore
-            return Result.err({
-              data: result,
-              tag: this.#customErrorCbs[response.status].tag,
-            });
+            return Result.err(
+              new CustomError(
+                // @ts-ignore
+                this.#customErrorCbs[response.status].tag,
+                result,
+              ),
+            );
           }
 
           if (attempts < retries) {
@@ -562,10 +574,13 @@ export class Request<
           });
 
           // @ts-ignore
-          return Result.err({
-            data: result,
-            tag: this.#customErrorCbs[response!.status].tag,
-          });
+          return Result.err(
+            new CustomError(
+              // @ts-ignore
+              this.#customErrorCbs[response!.status].tag,
+              result,
+            ),
+          );
         }
 
         return Result.err(

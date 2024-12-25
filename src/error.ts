@@ -80,7 +80,21 @@ export class AspiError<TReq extends AspiRequestInit> extends Error {
   }
 }
 
-export interface CustomError<Tag extends string, A> {
+export class CustomError<Tag extends string, A> extends Error {
   tag: Tag;
   data: A;
+
+  constructor(tag: Tag, data: A) {
+    super(tag);
+    this.tag = tag;
+    this.data = data;
+  }
 }
+
+export interface JSONParseError
+  extends CustomError<
+    'jsonParseError',
+    {
+      message: string;
+    }
+  > {}
