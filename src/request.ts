@@ -20,6 +20,7 @@ import type {
   RequestOptions,
 } from './types';
 import * as Result from './result';
+import { Aspi } from './aspi';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -44,7 +45,7 @@ export class Request<
   Method extends HttpMethods,
   TRequest extends AspiRequestInit = AspiRequestInit,
   Opts extends Record<any, any> = {
-    httpError: {};
+    error: {};
   },
 > {
   #path: string;
@@ -408,12 +409,16 @@ export class Request<
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]
           : never)
+      | CustomError<'jsonParseError', { message: string }>
     >
   > {
     return this.#makeRequest<T>(async (response) =>
-      response.json().catch((e) => ({
-        message: e instanceof Error ? e.message : 'Failed to parse JSON',
-      })),
+      response.json().catch((e) =>
+        Result.err({
+          data: e instanceof Error ? e.message : 'Failed to parse JSON',
+          tag: 'jsonParseError',
+        }),
+      ),
     );
   }
 
