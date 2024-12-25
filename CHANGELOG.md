@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.19
+
+### Minor Changes
+
+- 1e56194: json parse error yield either result or the value
+
 ## 0.1.0-next.18
 
 ### Patch Changes
