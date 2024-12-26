@@ -140,7 +140,6 @@ apiClient
   });
 ```
 
-
 ### Installation
 
 ```bash
@@ -150,6 +149,7 @@ npm install aspi
 ### Features
 
 #### Result type
+
 - `Result` type is a union type of `Ok` and `Err` type.
 - When you call a method that returns a `Result` type, you can use methods on `Result` to handle the result.
 - When the api succeeds, It will yield an `Ok` type with the data.
@@ -158,6 +158,7 @@ npm install aspi
 When succeded with OK, the data comes in the `AspiSuccessOk` type, where additional information about the request and response is also provided.
 
 #### Error handling
+
 - The error handling is done using the `Result` type, which is a union type of `Ok` and `Err` type.
 - When called `json` method on the response, it will return either the AspiSuccessOk with the data or AspiError with the error as well as JSON parsing error.
 - Additionally, user can define custom errors to handle specific http status codes, those errors can be pattern matched using any pattern matching library.
