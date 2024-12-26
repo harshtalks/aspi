@@ -14,6 +14,7 @@ import {
 } from './http';
 import type {
   AspiRequestInit,
+  AspiResultOk,
   AspiRetryConfig,
   BaseSchema,
   CustomErrorCb,
@@ -400,11 +401,7 @@ export class Request<
    */
   async json<T extends Opts['output']['_output']>(): Promise<
     Result.Result<
-      {
-        data: T;
-        request: AspiRequest<TRequest>;
-        response: AspiResponse;
-      },
+      AspiResultOk<TRequest, T>,
       | AspiError<TRequest>
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]
@@ -443,11 +440,7 @@ export class Request<
    */
   async text(): Promise<
     Result.Result<
-      {
-        data: string;
-        request: AspiRequest<TRequest>;
-        response: AspiResponse;
-      },
+      AspiResultOk<TRequest, string>,
       | AspiError<TRequest>
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]
@@ -461,11 +454,7 @@ export class Request<
     responseParser: (response: Response) => Promise<any>,
   ): Promise<
     Result.Result<
-      {
-        data: T;
-        request: AspiRequest<TRequest>;
-        response: AspiResponse;
-      },
+      AspiResultOk<TRequest, T>,
       | AspiError<TRequest>
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]

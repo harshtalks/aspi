@@ -62,3 +62,9 @@ export type ErrorCallbacks = Record<
     tag: unknown;
   }
 >;
+
+export type AspiResultOk<TRequest extends AspiRequestInit, TData> = {
+  data: TData;
+  request: AspiRequest<TRequest>;
+  response: AspiResponse;
+};
