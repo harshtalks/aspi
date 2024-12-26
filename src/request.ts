@@ -400,7 +400,11 @@ export class Request<
    */
   async json<T extends Opts['output']['_output']>(): Promise<
     Result.Result<
-      T,
+      {
+        data: T;
+        request: AspiRequest<TRequest>;
+        response: AspiResponse;
+      },
       | AspiError<TRequest>
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]
@@ -408,7 +412,8 @@ export class Request<
       | JSONParseError
     >
   > {
-    return this.#makeRequest<T>(async (response) =>
+    // @ts-ignore
+    return this.#makeRequest(async (response) =>
       response.json().catch(
         (e) =>
           new CustomError('jsonParseError', {
@@ -438,7 +443,11 @@ export class Request<
    */
   async text(): Promise<
     Result.Result<
-      string,
+      {
+        data: string;
+        request: AspiRequest<TRequest>;
+        response: AspiResponse;
+      },
       | AspiError<TRequest>
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]
@@ -452,20 +461,29 @@ export class Request<
     responseParser: (response: Response) => Promise<any>,
   ): Promise<
     Result.Result<
-      T,
+      {
+        data: T;
+        request: AspiRequest<TRequest>;
+        response: AspiResponse;
+      },
       | AspiError<TRequest>
       | (Opts extends { error: any }
           ? Opts['error'][keyof Opts['error']]
           : never)
     >
   > {
+    // request in the AspiRequest<RequestInit> format
     const request = this.#request();
 
+    // Retry Config
     const { retries, retryDelay, retryOn, retryWhile } =
       this.#sanitisedRetryConfig();
 
     try {
+      // request init with certain extra properties
       const requestInit = request.requestInit;
+
+      // url
       const url = [
         new URL(this.#path, this.#localRequestInit.baseUrl).toString(),
         this.#queryParams ? `?${this.#queryParams.toString()}` : '',
@@ -482,6 +500,7 @@ export class Request<
           responseData = await responseParser(response);
 
           if (responseData instanceof CustomError) {
+            // we can break out of loop now with the error -> ex. JSON Parsing Error
             // @ts-ignore
             return Result.err(responseData);
           }
@@ -490,29 +509,20 @@ export class Request<
             response.ok ||
             (!retryOn.includes(response.status as HttpErrorCodes) &&
               (!retryWhile ||
-                !retryWhile(request, {
-                  response,
-                  status: response.status as HttpErrorCodes,
-                  statusText: getHttpErrorStatus(
-                    response.status as HttpErrorCodes,
-                  ),
-                  responseData,
-                })))
+                !retryWhile(
+                  request,
+                  this.#makeResponse(response, responseData),
+                )))
           ) {
+            // we can break out of loop now
             break;
           }
 
           if (response.status in this.#customErrorCbs && attempts === retries) {
+            // custom error handler for this status code
             const result = this.#customErrorCbs[response.status].cb({
               request,
-              response: {
-                response,
-                status: response.status as HttpErrorCodes,
-                statusText: getHttpErrorStatus(
-                  response.status as HttpErrorCodes,
-                ),
-                responseData,
-              } as AspiResponse,
+              response: this.#makeResponse(response, responseData),
             });
 
             // @ts-ignore
@@ -526,32 +536,39 @@ export class Request<
           }
 
           if (attempts < retries) {
+            // Delaying the next retry
             const delay =
               typeof retryDelay === 'function'
-                ? retryDelay(retries - attempts - 1, retries, request, {
-                    status: response.status as HttpErrorCodes,
-                    statusText: getHttpErrorStatus(
-                      response.status as HttpErrorCodes,
-                    ),
-                    response,
-                    responseData,
-                  })
+                ? retryDelay(
+                    retries - attempts - 1,
+                    retries,
+                    request,
+                    this.#makeResponse(response, responseData),
+                  )
                 : retryDelay;
+
+            // delaying retry
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
         } catch (e) {
+          // max retry
           if (attempts === retries) throw e;
+
+          // delay for retry
           const delay =
             typeof retryDelay === 'function'
-              ? retryDelay(retries - attempts - 1, retries, request, {
-                  status: 500,
-                  statusText: 'INTERNAL_SERVER_ERROR',
-                  response,
-                  responseData,
-                })
+              ? retryDelay(
+                  retries - attempts - 1,
+                  retries,
+                  request,
+                  this.#makeResponse(response!, responseData),
+                )
               : retryDelay;
+
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
+
+        // next retry
         attempts++;
       }
 
@@ -559,14 +576,7 @@ export class Request<
         if (response!.status in this.#customErrorCbs) {
           const result = this.#customErrorCbs[response!.status].cb({
             request,
-            response: {
-              response: response,
-              status: response!.status as HttpErrorCodes,
-              statusText: getHttpErrorStatus(
-                response!.status as HttpErrorCodes,
-              ),
-              responseData,
-            } as AspiResponse,
+            response: this.#makeResponse(response!, responseData),
           });
 
           // @ts-ignore
@@ -580,27 +590,35 @@ export class Request<
         }
 
         return Result.err(
-          new AspiError(response!.statusText, this.#request(), {
-            response: response,
-            status: response!.status as HttpErrorCodes,
-            statusText: getHttpErrorStatus(response!.status as HttpErrorCodes),
-            responseData,
-          }),
+          new AspiError(
+            response!.statusText,
+            this.#request(),
+            this.#makeResponse(response!, responseData),
+          ),
         );
       }
 
       if (this.#schema) {
         try {
-          return Result.ok(this.#schema.parse(responseData) as T);
+          return Result.ok({
+            data: this.#schema.parse(responseData) as T,
+            request,
+            response: this.#makeResponse(response!, responseData),
+          });
         } catch (error) {
+          // @ts-ignore
           return Result.err({
             data: error,
             tag: 'parseError',
-          }) as Result.Result<T, Opts['parseError']>;
+          });
         }
       }
 
-      return Result.ok(responseData as T);
+      return Result.ok({
+        data: responseData as T,
+        request,
+        response: this.#makeResponse(response!, responseData),
+      });
     } catch (error) {
       if (500 in this.#customErrorCbs) {
         const result = this.#customErrorCbs[500].cb({
@@ -656,6 +674,15 @@ export class Request<
       retryDelay,
       retryOn,
       retryWhile,
+    };
+  }
+
+  #makeResponse<T>(response: Response, responseData: T): AspiResponse {
+    return {
+      response,
+      status: response.status as HttpErrorCodes,
+      statusText: getHttpErrorStatus(response.status as HttpErrorCodes),
+      responseData,
     };
   }
 }

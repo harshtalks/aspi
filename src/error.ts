@@ -2,12 +2,12 @@ import type { HttpErrorCodes, HttpErrorStatus } from './http';
 import type { AspiRequestInit, AspiRetryConfig } from './types';
 
 /**
- * Error response interface for HTTP requests
+ * Response interface used in error handling
  * @interface AspiResponse
- * @property {HttpErrorCodes} status - The HTTP error code
- * @property {HttpErrorStatus} statusText - The HTTP error status message
- * @property {Response} [response] - The optional raw Response object
- * @property {any} [responseData] - Optional response data payload
+ * @property {HttpErrorCodes} status - The HTTP status code of the response
+ * @property {HttpErrorStatus} statusText - The HTTP status text of the response
+ * @property {Response} [response] - Optional raw Response object
+ * @property {any} [responseData] - Optional response data content
  */
 export interface AspiResponse {
   status: HttpErrorCodes;
@@ -17,11 +17,14 @@ export interface AspiResponse {
 }
 
 /**
- * Request configuration interface extending RequestInit
+ * Interface representing an API request configuration
  * @interface AspiRequest
- * @extends {RequestInit}
- * @property {string} baseUrl - The base URL for the request
- * @property {string} path - The path to append to the base URL
+ * @template T - Request initialization options type extending AspiRequestInit
+ * @property {string} baseUrl - Base URL for the API request
+ * @property {string} path - Request path to append to baseUrl
+ * @property {T} requestInit - Request initialization options
+ * @property {URLSearchParams | null} queryParams - URL query parameters, if any
+ * @property {AspiRetryConfig<T>} retryConfig - Retry configuration for failed requests
  */
 export interface AspiRequest<T extends AspiRequestInit> {
   baseUrl: string;
@@ -80,10 +83,24 @@ export class AspiError<TReq extends AspiRequestInit> extends Error {
   }
 }
 
+/**
+ * Custom error class with generic tag and data fields
+ * @class CustomError
+ * @extends {Error}
+ * @template Tag - String literal type for the error tag
+ * @template A - Type of the error data
+ * @property {Tag} tag - Tag identifying the error type
+ * @property {A} data - Additional error data
+ */
 export class CustomError<Tag extends string, A> extends Error {
   tag: Tag;
   data: A;
 
+  /**
+   * Creates an instance of CustomError
+   * @param {Tag} tag - Tag identifying the error type
+   * @param {A} data - Additional error data
+   */
   constructor(tag: Tag, data: A) {
     super(tag);
     this.tag = tag;
@@ -91,6 +108,11 @@ export class CustomError<Tag extends string, A> extends Error {
   }
 }
 
+/**
+ * Interface representing a JSON parsing error
+ * @interface JSONParseError
+ * @extends {CustomError<'jsonParseError', { message: string }>}
+ */
 export interface JSONParseError
   extends CustomError<
     'jsonParseError',

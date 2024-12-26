@@ -23,24 +23,30 @@ export type AspiRetryConfig<TRequest extends AspiRequestInit> = {
   ) => boolean;
 };
 
+// Config for Aspi Instance
 export type AspiConfig = Pick<RequestInit, 'headers' | 'mode'> & AspiConfigBase;
 
+// Custom error callback
 export type CustomErrorCb<T extends AspiRequestInit, A extends {}> = (input: {
   request: AspiRequest<T>;
   response: AspiResponse;
 }) => A;
 
+// Middleware type -> modify request before sending
 export type Middleware<T extends RequestInit, U extends RequestInit> = (
   request: T,
 ) => U;
 
+// Aspi Request Init
 export interface AspiRequestInit extends RequestInit, AspiConfigBase {}
 
+// Zod Schema
 export interface BaseSchema {
   parse: (input: unknown) => unknown;
   _output: unknown;
 }
 
+// Aspi Instance
 export type RequestOptions<TRequest extends AspiRequestInit> = {
   requestConfig: TRequest;
   retryConfig?: AspiRetryConfig<TRequest>;
@@ -48,6 +54,7 @@ export type RequestOptions<TRequest extends AspiRequestInit> = {
   errorCbs?: ErrorCallbacks;
 };
 
+// Error Callbacks
 export type ErrorCallbacks = Record<
   number,
   {
