@@ -17,6 +17,7 @@ import type {
   AspiRetryConfig,
   BaseSchema,
   CustomErrorCb,
+  ErrorCallbacks,
   Middleware,
   RequestOptions,
 } from './types';
@@ -50,13 +51,7 @@ export class Request<
 > {
   #path: string;
   #localRequestInit: TRequest;
-  #customErrorCbs: Record<
-    number,
-    {
-      cb: (input: { request: any; response: any }) => any;
-      tag: unknown;
-    }
-  > = {};
+  #customErrorCbs: ErrorCallbacks = {};
   #queryParams?: URLSearchParams;
   #middlewares: Middleware<TRequest, TRequest>[];
   #schema: BaseSchema | null = null;
@@ -65,12 +60,18 @@ export class Request<
   constructor(
     method: HttpMethods,
     path: string,
-    { requestConfig, retryConfig, middlewares }: RequestOptions<TRequest>,
+    {
+      requestConfig,
+      retryConfig,
+      middlewares,
+      errorCbs,
+    }: RequestOptions<TRequest>,
   ) {
     this.#path = path;
     this.#middlewares = middlewares || [];
     this.#localRequestInit = { ...requestConfig, method: method } as TRequest;
     this.#retryConfig = retryConfig;
+    this.#customErrorCbs = errorCbs || {};
   }
 
   /**
@@ -212,20 +213,7 @@ export class Request<
    * });
    */
   notFound<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
-    this.#customErrorCbs[404] = {
-      cb,
-      tag: 'notFoundError',
-    };
-    // @ts-ignore
-    return this as Request<
-      Method,
-      TRequest,
-      Opts & {
-        error: Opts['error'] & {
-          notFound: CustomError<'notFoundError', A>;
-        };
-      }
-    >;
+    return this.error('notFoundError', 'NOT_FOUND', cb);
   }
 
   /**
@@ -240,20 +228,7 @@ export class Request<
    * });
    */
   unauthorised<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
-    this.#customErrorCbs[401] = {
-      cb,
-      tag: 'unauthorisedError',
-    };
-    // @ts-ignore
-    return this as Request<
-      Method,
-      TRequest,
-      Opts & {
-        error: Opts['error'] & {
-          unauthorised: CustomError<'unauthorisedError', A>;
-        };
-      }
-    >;
+    return this.error('unauthorisedError', 'UNAUTHORIZED', cb);
   }
 
   /**
@@ -268,20 +243,37 @@ export class Request<
    * });
    */
   forbidden<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
-    this.#customErrorCbs[403] = {
-      cb,
-      tag: 'forbiddenError',
-    };
-    // @ts-ignore
-    return this as Request<
-      Method,
-      TRequest,
-      Opts & {
-        error: Opts['error'] & {
-          forbidden: CustomError<'forbiddenError', A>;
-        };
-      }
-    >;
+    return this.error('forbiddenError', 'FORBIDDEN', cb);
+  }
+
+  /**
+   * Handles 501 Not Implemented errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.notImplemented((error) => {
+   *   console.log('Not implemented:', error);
+   *   return { message: 'This feature is not implemented yet' };
+   * });
+   */
+  notImplemented<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('notImplementedError', 'NOT_IMPLEMENTED', cb);
+  }
+
+  /**
+   * Handles 500 Internal Server Error errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.internalServerError((error) => {
+   *   console.log('Server error:', error);
+   *   return { message: 'An unexpected error occurred' };
+   * });
+   */
+  internalServerError<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('internalServerError', 'INTERNAL_SERVER_ERROR', cb);
   }
 
   /**
@@ -320,8 +312,12 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Opts & {
-        error: Opts['error'] & { [K in Tag]: CustomError<Tag, A> };
+      Omit<Opts, 'error'> & {
+        error: {
+          [K in Tag | keyof Opts['error']]: K extends Tag
+            ? CustomError<Tag, A>
+            : Opts['error'][K];
+        };
       }
     >;
   }

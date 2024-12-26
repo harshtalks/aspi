@@ -1,9 +1,12 @@
-import type { HttpMethods } from './http';
+import type { CustomError } from './error';
+import { httpErrors, type HttpErrorStatus, type HttpMethods } from './http';
 import { Request } from './request';
 import type {
   AspiConfig,
   AspiRequestInit,
   AspiRetryConfig,
+  CustomErrorCb,
+  ErrorCallbacks,
   Middleware,
 } from './types';
 
@@ -22,10 +25,14 @@ import type {
  * const users = await api.get('/users').json();
  * const user = await api.post('/users', { name: 'John' }).json();
  */
-export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
+export class Aspi<
+  TRequest extends AspiRequestInit = AspiRequestInit,
+  Opts extends Record<any, any> = {},
+> {
   #globalRequestInit: TRequest;
   #middlewares: Middleware<TRequest, TRequest>[] = [];
   #retryConfig?: AspiRetryConfig<TRequest>;
+  #customErrorCbs: ErrorCallbacks = {};
 
   constructor(config: AspiConfig) {
     const { retryConfig, ...requestConfig } = config;
@@ -72,7 +79,7 @@ export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
     path: string,
     body?: BodyInit,
   ) {
-    return new Request<M, TRequest, {}>(method, path, {
+    return new Request<M, TRequest, Opts>(method, path, {
       requestConfig: {
         ...this.#globalRequestInit,
         method,
@@ -80,6 +87,7 @@ export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
       },
       retryConfig: this.#retryConfig,
       middlewares: this.#middlewares,
+      errorCbs: this.#customErrorCbs,
     });
   }
 
@@ -233,5 +241,106 @@ export class Aspi<TRequest extends AspiRequestInit = AspiRequestInit> {
   use<T extends TRequest, U extends TRequest>(fn: Middleware<T, U>): Aspi<U> {
     this.#middlewares = [...this.#middlewares, fn as any];
     return this as unknown as Aspi<U>;
+  }
+
+  /**
+   * Registers a custom error handler for a specific HTTP status
+   * @param {string} tag - The error tag identifier
+   * @param {HttpErrorStatus} status - The HTTP status code to handle
+   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * const api = new Aspi({ baseUrl: 'https://api.example.com' });
+   * api.error('customError', 'BAD_REQUEST', (req, res) => {
+   *   console.log('Bad request error occurred');
+   *   return { message: 'Invalid input' };
+   * });
+   */
+  error<Tag extends string, A extends {}>(
+    tag: Tag,
+    status: HttpErrorStatus,
+    cb: CustomErrorCb<TRequest, A>,
+  ) {
+    this.#customErrorCbs[httpErrors[status]] = {
+      cb,
+      tag,
+    };
+
+    return this as Aspi<
+      TRequest,
+      Opts & {
+        error: {
+          [K in Tag | keyof Opts['error']]: K extends Tag
+            ? CustomError<Tag, A>
+            : Opts['error'][K];
+        };
+      }
+    >;
+  }
+
+  /**
+   * Registers a handler for 404 Not Found errors
+   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * api.notFound((req, res) => ({ message: 'Resource not found' }));
+   */
+  notFound<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('notFoundError', 'NOT_FOUND', cb);
+  }
+
+  /**
+   * Registers a handler for 400 Bad Request errors
+   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * api.badRequest((req, res) => ({ message: 'Invalid request parameters' }));
+   */
+  badRequest<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('badRequestError', 'BAD_REQUEST', cb);
+  }
+
+  /**
+   * Registers a handler for 401 Unauthorized errors
+   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * api.unauthorized((req, res) => ({ message: 'Authentication required' }));
+   */
+  unauthorized<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('unauthorizedError', 'UNAUTHORIZED', cb);
+  }
+
+  /**
+   * Registers a handler for 403 Forbidden errors
+   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * api.forbidden((req, res) => ({ message: 'Access denied' }));
+   */
+  forbidden<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('forbiddenError', 'FORBIDDEN', cb);
+  }
+
+  /**
+   * Registers a handler for 501 Not Implemented errors
+   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * api.notImplemented((req, res) => ({ message: 'Feature not implemented' }));
+   */
+  notImplemented<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('notImplementedError', 'NOT_IMPLEMENTED', cb);
+  }
+
+  /**
+   * Registers a handler for 500 Internal Server errors
+   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
+   * @returns {Aspi} The Aspi instance for chaining
+   * @example
+   * api.internalServerError((req, res) => ({ message: 'Server error occurred' }));
+   */
+  internalServerError<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('internalServerErrorError', 'INTERNAL_SERVER_ERROR', cb);
   }
 }

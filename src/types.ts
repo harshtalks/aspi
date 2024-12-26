@@ -45,4 +45,13 @@ export type RequestOptions<TRequest extends AspiRequestInit> = {
   requestConfig: TRequest;
   retryConfig?: AspiRetryConfig<TRequest>;
   middlewares?: Middleware<TRequest, TRequest>[];
+  errorCbs?: ErrorCallbacks;
 };
+
+export type ErrorCallbacks = Record<
+  number,
+  {
+    cb: (input: { request: any; response: any }) => any;
+    tag: unknown;
+  }
+>;
