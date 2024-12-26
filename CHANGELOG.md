@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.20
+
+### Minor Changes
+
+- 85434c2: global error config
+
 ## 0.1.0-next.19
 
 ### Minor Changes
