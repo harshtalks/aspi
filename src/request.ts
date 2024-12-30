@@ -494,14 +494,18 @@ export class Request<
             return Result.err(responseData);
           }
 
+          // check if retryWhile condition is satisfied
+          const retryWhileCondition = retryWhile
+            ? await retryWhile(
+                request,
+                this.#makeResponse(response, responseData),
+              )
+            : false;
+
           if (
             response.ok ||
             (!retryOn.includes(response.status as HttpErrorCodes) &&
-              (!retryWhile ||
-                !retryWhile(
-                  request,
-                  this.#makeResponse(response, responseData),
-                )))
+              !retryWhileCondition)
           ) {
             // we can break out of loop now
             break;
