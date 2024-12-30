@@ -1,5 +1,11 @@
 # aspi
 
+## 0.1.0-next.23
+
+### Minor Changes
+
+- fbb929d: finalized retryWhile
+
 ## 0.1.0-next.22
 
 ### Minor Changes
