@@ -1,5 +1,11 @@
 # aspi
 
+## 1.1.0
+
+### Minor Changes
+
+- 9859ddd: fix in types and new url method
+
 ## 1.0.0
 
 ### Major Changes

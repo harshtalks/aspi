@@ -1,7 +1,7 @@
 {
   "name": "aspi",
   "description": "Rest API client for typescript projects with chain of responsibility design pattern.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "module": "src/index.ts",
   "type": "module",
   "devDependencies": {
