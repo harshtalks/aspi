@@ -1,5 +1,41 @@
 # aspi
 
+## 1.0.0
+
+### Major Changes
+
+- ce72dd4: first release
+
+### Minor Changes
+
+- 919e90a: wrong types for result
+- 3ba8b43: parseError support
+- 1f32b1f: custom error for json parse failure
+- 1e56194: json parse error yield either result or the value
+- 27be8ee: text api
+- fc8a8e6: types fix for custom error
+- 2b59531: body as input
+- 3acc3bd: success channel to include response and request object
+- f1f1acb: readme update
+- 3ca04b6: this.request to obtain request
+- 0008024: partial retry config for better control
+- fa46908: change in types of error req
+- f614e30: retry policy
+- 646936b: simplfied error tag mgmt
+- 05c98f1: zod support
+- 85434c2: global error config
+- 2e035ab: method and updated request object
+- ac7aae5: first release
+- fbb929d: finalized retryWhile
+
+### Patch Changes
+
+- c77bc99: missing dist
+- 4a300a9: readme
+- af8b817: commit fixes
+- b1266ef: unused dep
+- 4b7b60d: updated jsdocc
+
 ## 0.1.0-next.23
 
 ### Minor Changes

@@ -1,5 +1,0 @@
----
-'aspi': major
----
-
-first release
