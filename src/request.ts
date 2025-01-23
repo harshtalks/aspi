@@ -414,10 +414,8 @@ export class Request<
       response.json().catch(
         (e) =>
           new CustomError('jsonParseError', {
-            data: {
-              message: e instanceof Error ? e.message : 'Failed to parse JSON',
-            },
-          }),
+            message: e instanceof Error ? e.message : 'Failed to parse JSON',
+          }) as JSONParseError,
       ),
     );
   }
@@ -450,6 +448,36 @@ export class Request<
     return this.#makeRequest<string>((response) => response.text());
   }
 
+  #url() {
+    // Normalize base URL by removing trailing slashes
+    const baseUrl = this.#localRequestInit.baseUrl?.replace(/\/+$/, '') ?? '';
+
+    // Ensure path starts with exactly one forward slash
+    const path = this.#path.replace(/^\/+/, '/');
+
+    // Safely concatenate URL parts and handle query params
+    const queryString = this.#queryParams
+      ? `?${encodeURIComponent(this.#queryParams.toString())}`
+      : '';
+
+    const url = [baseUrl, path, queryString].filter(Boolean).join('');
+
+    return url;
+  }
+
+  /**
+   * Returns the complete URL for the request including base URL, path, and query parameters.
+   * @returns The complete URL string
+   * @example
+   * const request = new Request('/users', config);
+   * request.setBaseUrl('https://api.example.com');
+   * request.setQueryParams({ id: '123' });
+   * console.log(request.url()); // 'https://api.example.com/users?id=123'
+   */
+  url() {
+    return this.#url();
+  }
+
   async #makeRequest<T>(
     responseParser: (response: Response) => Promise<any>,
   ): Promise<
@@ -472,11 +500,8 @@ export class Request<
       // request init with certain extra properties
       const requestInit = request.requestInit;
 
-      // url
-      const url = [
-        new URL(this.#path, this.#localRequestInit.baseUrl).toString(),
-        this.#queryParams ? `?${this.#queryParams.toString()}` : '',
-      ].join('');
+      // URL
+      const url = this.#url();
 
       let attempts = 0;
       let response;
