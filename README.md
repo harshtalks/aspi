@@ -49,18 +49,6 @@ const getTodos = async (id: number) => {
     }
   }
 
-  Result.match(response, {
-    onOk: (data) => {
-      console.log(data);
-    },
-    onErr: (error) => {
-      if (error.tag === 'aspiError') {
-        console.error(error.response.status);
-      } else if (error.tag === 'notFoundError') {
-        console.log(error.data.message);
-      }
-    },
-  });
 };
 
 getTodos(1);
@@ -97,6 +85,7 @@ getTodos(1);
 
     getTodos(1);
 };
+```
 
 ## Example with Schema Validation (with Zod)
 
@@ -254,4 +243,48 @@ const resultWithoutError = Result.pipe(
   .execute();
 
 // Result<AspiResultOk<AspiRequestInit, { data: any; }>, never>
+```
+
+##### Schema Validation
+Aspi by default implements schema validation using StandardSchemaV1. It means, as of now, it only supports Zod, Arktype and Valibot. If you want to use schema validation, you can call the `schema` method on the response.
+
+```typescript
+import { aspi, Result } from 'aspi';
+import { z, ZodError } from 'zod';
+
+// JSON Placeholder API Client
+const apiClient = new Aspi({
+  baseUrl: 'https://jsonplaceholder.typicode.com',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+const getTodo = async (id: number) => {
+  const response = await apiClient
+    .get(`/todos/${id}`)
+    .withResult()
+    .schema(
+      z.object({
+        id: z.number(),
+        title: z.string(),
+        completed: z.boolean(),
+      }),
+    )
+    .json();
+
+  Result.match(response, {
+    onOk: (data) => {
+      console.log(data);
+    },
+    onErr: (err) => {
+      if (err.tag === 'parseError') {
+        const error = err.data as ZodError;
+        console.error(error.errors);
+      } else {
+        // do something else
+      }
+    },
+  });
+};
 ```
