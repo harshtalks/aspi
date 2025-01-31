@@ -30,6 +30,7 @@ const getTodos = async (id: number) => {
     .notFound(() => ({
       message: 'Todo not found',
     }))
+    .withResult()
     .json<{
       id: number;
       title: string;
@@ -70,6 +71,7 @@ const apiClient = new Aspi({
 const getTodo = async (id: number) => {
   const response = await apiClient
     .get(`/todos/${id}`)
+    .withResult()
     .output(
       z.object({
         id: z.number(),
@@ -121,6 +123,7 @@ apiClient
     // Exponential backoff
     retryDelay: (attempts) => Math.pow(2, attempts) * 1000,
   })
+  .withResult()
   .json()
   .then((response) => {
     Result.match(response, {

@@ -40,12 +40,6 @@ export type Middleware<T extends RequestInit, U extends RequestInit> = (
 // Aspi Request Init
 export interface AspiRequestInit extends RequestInit, AspiConfigBase {}
 
-// Zod Schema
-export interface BaseSchema {
-  parse: (input: unknown) => unknown;
-  _output: unknown;
-}
-
 // Aspi Instance
 export type RequestOptions<TRequest extends AspiRequestInit> = {
   requestConfig: TRequest;

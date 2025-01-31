@@ -16,13 +16,14 @@ import type {
   AspiRequestInit,
   AspiResultOk,
   AspiRetryConfig,
-  BaseSchema,
   CustomErrorCb,
   ErrorCallbacks,
   Middleware,
   RequestOptions,
 } from './types';
 import * as Result from './result';
+import type { StandardSchemaV1 } from './standard-schema';
+import { Aspi } from './aspi';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -41,6 +42,7 @@ import * as Result from './result';
  *   .setQueryParams({ page: '1' })
  *   .setBearer('token123')
  *   .notFound(() => ({ message: 'Not found' }))
+ *   .withResult()
  *   .json<User>();
  */
 export class Request<
@@ -55,8 +57,9 @@ export class Request<
   #customErrorCbs: ErrorCallbacks = {};
   #queryParams?: URLSearchParams;
   #middlewares: Middleware<TRequest, TRequest>[];
-  #schema: BaseSchema | null = null;
+  #schema: StandardSchemaV1 | null = null;
   #retryConfig?: AspiRetryConfig<TRequest>;
+  #shouldBeResult: boolean = false;
 
   constructor(
     method: HttpMethods,
@@ -168,6 +171,7 @@ export class Request<
    */
   bodyJson<Body extends {}>(body: Body) {
     this.#localRequestInit.body = JSON.stringify(body);
+    // @ts-ignore
     return this as Request<
       Method,
       TRequest,
@@ -193,6 +197,7 @@ export class Request<
    */
   body(body: BodyInit) {
     this.#localRequestInit.body = body;
+    // @ts-ignore
     return this as Request<
       Method,
       TRequest,
@@ -285,7 +290,9 @@ export class Request<
    * @returns The request instance for chaining
    * @example
    * const request = new Request('/users', config);
-   * request.error('customError', 'BAD_REQUEST', (error) => {
+   * request
+      .withResult()
+      .error('customError', 'BAD_REQUEST', (error) => {
    *   console.log('Bad request error:', error);
    *   return {
    *     message: 'Invalid input',
@@ -335,8 +342,11 @@ export class Request<
    *   sort: 'desc'
    * });
    */
-  setQueryParams<T extends Record<string, string>>(params: T) {
+  setQueryParams<
+    T extends Record<string, string> | string[][] | string | URLSearchParams,
+  >(params: T) {
     this.#queryParams = new URLSearchParams(params);
+    // @ts-ignore
     return this as Request<
       Method,
       TRequest,
@@ -361,6 +371,7 @@ export class Request<
    *
    * const request = new Request('/users', config);
    * const result = await request
+   *   .withResult()
    *   .output(userSchema)
    *   .json();
    *
@@ -368,16 +379,19 @@ export class Request<
    *   const user = result.value; // Typed and validated user data
    * }
    */
-  output<Output extends BaseSchema>(schema: Output) {
+  schema<TSchema extends StandardSchemaV1>(schema: TSchema) {
     this.#schema = schema;
     // @ts-ignore
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'output'> & {
-        output: Output;
+      Omit<Opts, 'schema'> & {
+        schema: TSchema;
         error: Opts['error'] & {
-          parseError: CustomError<'parseError', unknown>;
+          parseError: CustomError<
+            'parseError',
+            StandardSchemaV1.FailureResult['issues']
+          >;
         };
       }
     >;
@@ -390,6 +404,7 @@ export class Request<
    * const request = new Request('/users', config);
    * const result = await request
    *   .setQueryParams({ id: '123' })
+   *   .withResult()
    *   .notFound((error) => ({ message: 'User not found' }))
    *   .json<User>();
    *
@@ -399,25 +414,41 @@ export class Request<
    *   console.error(result.error); // Error handling
    * }
    */
-  async json<T extends Opts['output']['_output']>(): Promise<
-    Result.Result<
-      AspiResultOk<TRequest, T>,
-      | AspiError<TRequest>
-      | (Opts extends { error: any }
-          ? Opts['error'][keyof Opts['error']]
-          : never)
-      | JSONParseError
-    >
+  async json<T extends StandardSchemaV1.InferOutput<Opts['schema']>>(): Promise<
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, T>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+          | JSONParseError
+        >
+      : [
+          AspiResultOk<TRequest, T> | null,
+          (
+            | (
+                | AspiError<TRequest>
+                | (Opts extends { error: any }
+                    ? Opts['error'][keyof Opts['error']]
+                    : never)
+                | JSONParseError
+              )
+            | null
+          ),
+        ]
   > {
-    // @ts-ignore
-    return this.#makeRequest(async (response) =>
+    const output = await this.#makeRequest(async (response) =>
       response.json().catch(
         (e) =>
           new CustomError('jsonParseError', {
             message: e instanceof Error ? e.message : 'Failed to parse JSON',
-          }) as JSONParseError,
+          }),
       ),
     );
+
+    // @ts-ignore
+    return this.#mapResponse(output);
   }
 
   /**
@@ -427,6 +458,7 @@ export class Request<
    * const request = new Request('/data.txt', config);
    * const result = await request
    *   .setQueryParams({ version: '1' })
+   *   .withResult()
    *   .notFound((error) => ({ message: 'Text file not found' }))
    *   .text();
    *
@@ -437,15 +469,76 @@ export class Request<
    * }
    */
   async text(): Promise<
-    Result.Result<
-      AspiResultOk<TRequest, string>,
-      | AspiError<TRequest>
-      | (Opts extends { error: any }
-          ? Opts['error'][keyof Opts['error']]
-          : never)
-    >
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, string>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+        >
+      : [
+          AspiResultOk<TRequest, string> | null,
+          (
+            | (
+                | AspiError<TRequest>
+                | (Opts extends { error: any }
+                    ? Opts['error'][keyof Opts['error']]
+                    : never)
+              )
+            | null
+          ),
+        ]
   > {
-    return this.#makeRequest<string>((response) => response.text());
+    const output = await this.#makeRequest<string>((response) =>
+      response.text(),
+    );
+    // @ts-ignore
+    return this.#mapResponse(output);
+  }
+
+  /**
+   * Executes the request and returns the response as a Blob.
+   * @returns A Promise containing the Result type with either successful Blob data or error information
+   * @example
+   * const request = new Request('/image.jpg', config);
+   * const result = await request
+   *   .setQueryParams({ size: 'large' })
+   *   .withResult()
+   *   .notFound((error) => ({ message: 'Image not found' }))
+   *   .blob();
+   *
+   * if (Result.isOk(result)) {
+   *   const imageBlob = result.value; // Blob data
+   * } else {
+   *   console.error(result.error); // Error handling
+   * }
+   */
+  async blob(): Promise<
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, Blob>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+        >
+      : [
+          AspiResultOk<TRequest, Blob> | null,
+          (
+            | (
+                | AspiError<TRequest>
+                | (Opts extends { error: any }
+                    ? Opts['error'][keyof Opts['error']]
+                    : never)
+              )
+            | null
+          ),
+        ]
+  > {
+    const output = await this.#makeRequest<Blob>((response) => response.blob());
+    // @ts-ignore
+    return this.#mapResponse(output);
   }
 
   #url() {
@@ -457,7 +550,7 @@ export class Request<
 
     // Safely concatenate URL parts and handle query params
     const queryString = this.#queryParams
-      ? `?${encodeURIComponent(this.#queryParams.toString())}`
+      ? `?${this.#queryParams.toString()}`
       : '';
 
     const url = [baseUrl, path, queryString].filter(Boolean).join('');
@@ -476,6 +569,44 @@ export class Request<
    */
   url() {
     return this.#url();
+  }
+
+  /**
+   * Configures the request to return a Result type instead of a tuple.
+   * @returns The request instance for chaining with Result type return value
+   * @example
+   * const request = new Request('/users', config);
+   * const result = await request
+   *   .withResult()
+   *   .json<User>();
+   *
+   * // Returns Result type instead of tuple
+   * if (Result.isOk(result)) {
+   *   const user = result.value;
+   * }
+   */
+  withResult() {
+    this.#shouldBeResult = true;
+    // @ts-ignore
+    return this as Request<
+      Method,
+      TRequest,
+      Omit<Opts, 'withResult'> & {
+        withResult: true;
+      }
+    >;
+  }
+
+  #mapResponse<T, E>(value: Result.Result<T, E>) {
+    if (this.#shouldBeResult) {
+      return value;
+    }
+
+    if (Result.isOk(value)) {
+      return [Result.getOrNull(value), null];
+    } else {
+      return [null, Result.getErrorOrNull(value)];
+    }
   }
 
   async #makeRequest<T>(
@@ -617,19 +748,24 @@ export class Request<
       }
 
       if (this.#schema) {
-        try {
-          return Result.ok({
-            data: this.#schema.parse(responseData) as T,
-            request,
-            response: this.#makeResponse(response!, responseData),
-          });
-        } catch (error) {
+        const data = this.#schema['~standard'].validate(responseData);
+        if (data instanceof Promise) {
+          throw new Error('Schema validation should not return a promise');
+        }
+
+        if (data.issues) {
           // @ts-ignore
           return Result.err({
-            data: error,
+            data: data.issues,
             tag: 'parseError',
           });
         }
+
+        return Result.ok({
+          data: data.value as T,
+          request,
+          response: this.#makeResponse(response!, responseData),
+        });
       }
 
       return Result.ok({
