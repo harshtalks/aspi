@@ -1,5 +1,11 @@
 # aspi
 
+## 1.1.0-beta.0
+
+### Minor Changes
+
+- 2b5b067: re releasing the package, major api change, following proper semver, we can delete the prev package as it was not used anywhere.
+
 ## 1.1.0
 
 ### Minor Changes

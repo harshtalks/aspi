@@ -15,7 +15,6 @@ I made this project because I am not happy with any of the Rest API clients avai
 - 🔄 Retry support
 - 📜 Schema validation support - Zod, Arktype etc.
 
-
 ## Example
 
 ```typescript
@@ -29,7 +28,7 @@ const apiClient = new Aspi({
 });
 
 const getTodos = async (id: number) => {
-  const [value,error] = await apiClient
+  const [value, error] = await apiClient
     .get(`/todos/${id}`)
     .notFound(() => ({
       message: 'Todo not found',
@@ -40,18 +39,17 @@ const getTodos = async (id: number) => {
       completed: boolean;
     }>();
 
-  if(value){
+  if (value) {
     console.log(value);
   }
 
-  if(error){
-    if(error.tag === 'aspiError'){
+  if (error) {
+    if (error.tag === 'aspiError') {
       console.error(error.response.status);
-    }else if(error.tag === 'notFoundError'){
+    } else if (error.tag === 'notFoundError') {
       console.log(error.data.message);
     }
   }
-
 };
 
 getTodos(1);
@@ -60,33 +58,33 @@ getTodos(1);
 ## With Result type
 
 ```typescript
-  const getTodos = async (id: number) => {
-    const [value,error] = await apiClient
-      .get(`/todos/${id}`)
-      .notFound(() => ({
-        message: 'Todo not found',
-      }))
-      .withResult()
-      .json<{
-        id: number;
-        title: string;
-        completed: boolean;
-      }>();
+const getTodos = async (id: number) => {
+  const [value, error] = await apiClient
+    .get(`/todos/${id}`)
+    .notFound(() => ({
+      message: 'Todo not found',
+    }))
+    .withResult()
+    .json<{
+      id: number;
+      title: string;
+      completed: boolean;
+    }>();
 
-    Result.match(response, {
-      onOk: (data) => {
-        console.log(data);
-      },
-      onErr: (error) => {
-        if (error.tag === 'aspiError') {
-          console.error(error.response.status);
-        } else if (error.tag === 'notFoundError') {
-          console.log(error.data.message);
-        }
-      },
-    });
+  Result.match(response, {
+    onOk: (data) => {
+      console.log(data);
+    },
+    onErr: (error) => {
+      if (error.tag === 'aspiError') {
+        console.error(error.response.status);
+      } else if (error.tag === 'notFoundError') {
+        console.log(error.data.message);
+      }
+    },
+  });
 
-    getTodos(1);
+  getTodos(1);
 };
 ```
 
@@ -200,13 +198,13 @@ When succeded with OK, the data comes in the `AspiSuccessOk` type, where additio
 - When called `json` method on the response, it will return either the AspiSuccessOk with the data or AspiError with the error as well as JSON parsing error.
 - Additionally, user can define custom errors to handle specific http status codes, those errors can be pattern matched using any pattern matching library.
 
-
 #### API Descriptions
 
 ##### WithResult
+
 By default, the response is not wrapped in the Result type. It will be a tuple of the value and error. both can be null but only one will be non-null at a time. If you want the response to be wrapped in the Result type, you can call `withResult` method on the response.
 
-```typescript
+````typescript
 const response = await new Aspi({ baseUrl: '...' })
   .get('...')
   .json<{ data: any }>();
@@ -246,9 +244,10 @@ const resultWithoutError = Result.pipe(
   .execute();
 
 // Result<AspiResultOk<AspiRequestInit, { data: any; }>, never>
-```
+````
 
 ##### Schema Validation
+
 Aspi by default implements schema validation using StandardSchemaV1. It means, as of now, it only supports Zod, Arktype and Valibot. If you want to use schema validation, you can call the `schema` method on the response.
 
 ```typescript

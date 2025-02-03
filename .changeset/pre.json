@@ -4,5 +4,7 @@
   "initialVersions": {
     "aspi": "1.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "small-lobsters-hide"
+  ]
 }
