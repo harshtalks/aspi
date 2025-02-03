@@ -6,12 +6,15 @@ I made this project because I am not happy with any of the Rest API clients avai
 
 - 🔷 End to end TypeScript support
 - 📦 Very small bundle size
+- 🚀 Built on top of native fetch API
+- 📦 No dependencies
 - ⛓️ Chain of responsibility pattern
 - 🧮 Monadic API
 - ⚠️ Errors as values with Result type
 - 🔍 Errors comes with support for pattern matching
 - 🔄 Retry support
 - 📜 Schema validation support - Zod, Arktype etc.
+
 
 ## Example
 
