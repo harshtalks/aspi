@@ -730,7 +730,7 @@ export class Request<
             // Delaying the next retry
             const delay =
               typeof retryDelay === 'function'
-                ? retryDelay(
+                ? await retryDelay(
                     retries - attempts - 1,
                     retries,
                     request,
@@ -748,7 +748,7 @@ export class Request<
           // delay for retry
           const delay =
             typeof retryDelay === 'function'
-              ? retryDelay(
+              ? await retryDelay(
                   retries - attempts - 1,
                   retries,
                   request,

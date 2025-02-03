@@ -15,7 +15,7 @@ export type AspiRetryConfig<TRequest extends AspiRequestInit> = {
         totalRetries: number,
         request: AspiRequest<TRequest>,
         response: AspiResponse,
-      ) => number);
+      ) => number | Promise<number>);
   retryOn?: Array<HttpErrorCodes>;
   retryWhile?: (
     request: AspiRequest<TRequest>,

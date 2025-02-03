@@ -349,6 +349,26 @@ describe('Retry Suite', () => {
     expect(count).toBe(4);
   });
 
+  it('should retry while async condition is true', async () => {
+    let count = 0;
+    const [response] = await aspi
+      .get('/500')
+      .setRetry({
+        retries: 4,
+        retryWhile: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          return true;
+        },
+        onRetry: () => {
+          count++;
+        },
+      })
+      .text();
+
+    expect(response).toBeNull();
+    expect(count).toBe(4);
+  });
+
   it('should have retries with delay', async () => {
     let count = 0;
     const startTime = performance.now();
@@ -397,5 +417,31 @@ describe('Retry Suite', () => {
     expect(response).toBeNull();
     expect(count).toBe(retries);
     expect(totalTime).toBeGreaterThanOrEqual(expectedDelay);
+  });
+
+  it('should have retries with delay as promise', async () => {
+    let count = 0;
+    const startTime = performance.now();
+    const retries = 2;
+    const totalTimeout = 1000 * (retries - 1);
+    const [response] = await aspi
+      .get('/500')
+      .setRetry({
+        retries,
+        retryOn: [500],
+        retryDelay: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return 1000;
+        },
+        onRetry: () => {
+          count++;
+        },
+      })
+      .text();
+
+    const totalTime = performance.now() - startTime;
+    expect(response).toBeNull();
+    expect(count).toBe(retries);
+    expect(totalTime).toBeGreaterThanOrEqual(totalTimeout);
   });
 });
