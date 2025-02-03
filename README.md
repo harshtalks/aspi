@@ -204,13 +204,13 @@ When succeded with OK, the data comes in the `AspiSuccessOk` type, where additio
 
 By default, the response is not wrapped in the Result type. It will be a tuple of the value and error. both can be null but only one will be non-null at a time. If you want the response to be wrapped in the Result type, you can call `withResult` method on the response.
 
-````typescript
+```typescript
 const response = await new Aspi({ baseUrl: '...' })
   .get('...')
   .json<{ data: any }>();
 
 // [AspiResultOk<AspiRequestInit, {  data: any; }> | null, JSONParseError | AspiError<AspiRequestInit> | null]
-```typescript
+```
 
 The above response is a tuple of the value and error. The value itself is wrapped in the AspiResultOk type. It contains the request and response information as well as the data. If you want the response to be wrapped in the Result type, you can call `withResult` method on the response.
 
@@ -221,7 +221,7 @@ const response = await new Aspi({ baseUrl: '...' })
   .json<{ data: any }>();
 
 // Result<AspiResultOk<AspiRequestInit, { data: any; }>, JSONParseError | AspiError<AspiRequestInit>>
-```typescript
+```
 
 The above response is a Result type. It can be pattern matched using any pattern matching library. We also pack one custom Result implementation that can be used to pattern match the response.
 
@@ -244,7 +244,7 @@ const resultWithoutError = Result.pipe(
   .execute();
 
 // Result<AspiResultOk<AspiRequestInit, { data: any; }>, never>
-````
+```
 
 ##### Schema Validation
 
