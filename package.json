@@ -33,7 +33,7 @@
   },
   "homepage": "https://github.com/harshtalks/aspi",
   "scripts": {
-    "ci": "bun run build && bun run check-format && bun run lint",
+    "ci": "bun run test && bun run build && bun run check-format && bun run lint",
     "format": "prettier --write .",
     "check-format": "prettier --check .",
     "build": "tsup",
