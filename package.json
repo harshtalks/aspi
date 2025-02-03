@@ -33,14 +33,15 @@
   },
   "homepage": "https://github.com/harshtalks/aspi",
   "scripts": {
-    "ci": "bun run test && bun run build && bun run check-format && bun run lint",
+    "ci": "bun run test:run && bun run build && bun run check-format && bun run lint",
     "format": "prettier --write .",
     "check-format": "prettier --check .",
     "build": "tsup",
     "lint": "tsc",
     "local-release": "changeset version && changeset publish",
     "prepublishOnly": "bun run ci",
-    "test": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "exports": {
     "./package.json": "./package.json",
