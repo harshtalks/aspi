@@ -21,6 +21,7 @@ export type AspiRetryConfig<TRequest extends AspiRequestInit> = {
     request: AspiRequest<TRequest>,
     response: AspiResponse,
   ) => boolean | Promise<boolean>;
+  onRetry?: (request: AspiRequest<TRequest>, response: AspiResponse) => void;
 };
 
 // Config for Aspi Instance

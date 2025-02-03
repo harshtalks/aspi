@@ -207,6 +207,10 @@ describe('Error Suite', () => {
         expect(error.data).toBe('404 not found');
       }
     });
+
+    it('should yield an instance of Error', () => {
+      expect(error).toBeInstanceOf(Error);
+    });
   });
 
   describe('401 Error with custom tag and custom error callback', async () => {
@@ -225,6 +229,10 @@ describe('Error Suite', () => {
 
     it('should yield with custom tag', () => {
       expect(error?.tag).toBe('unauthorisedError');
+    });
+
+    it('should yield an instance of Error', () => {
+      expect(error).toBeInstanceOf(Error);
     });
 
     it('should yield with custom message', () => {
@@ -262,5 +270,132 @@ describe('API Suite', () => {
       expect(headers.get('Authorization')).toBe('Bearer token');
       return req;
     });
+  });
+});
+
+describe('Schema Suite', () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://jsonplaceholder.typicode.com',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  describe('should yield error when schema fails', async () => {
+    const [todo, todoError] = await aspi
+      .post('/todos')
+      .bodySchema(
+        z.object({
+          name: z.string(),
+        }),
+      )
+      .bodyJson({
+        // @ts-ignore
+        name: 10,
+      })
+      .json();
+
+    it('should yield a value as null and error', () => {
+      expect(todo).toBeNull();
+      expect(todoError).toBeDefined();
+    });
+
+    it('should have error tag as parseError"', () => {
+      expect(todoError?.tag).toBe('parseError');
+    });
+
+    it('should yield an instance of Error', () => {
+      expect(todoError).toBeInstanceOf(Error);
+    });
+  });
+});
+
+describe('Retry Suite', () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://httpstat.us/',
+  });
+
+  it('should retry 3 times', async () => {
+    let count = 0;
+    const [response] = await aspi
+      .get('/500')
+      .setRetry({
+        retries: 3,
+        retryOn: [500],
+        onRetry: () => {
+          count++;
+        },
+      })
+      .text();
+
+    expect(response).toBeNull();
+    expect(count).toBe(3);
+  });
+
+  it('should retry 4 times while condition is true', async () => {
+    let count = 0;
+    const [response] = await aspi
+      .get('/500')
+      .setRetry({
+        retries: 4,
+        retryWhile: () => true,
+        onRetry: () => {
+          count++;
+        },
+      })
+      .text();
+
+    expect(response).toBeNull();
+    expect(count).toBe(4);
+  });
+
+  it('should have retries with delay', async () => {
+    let count = 0;
+    const startTime = performance.now();
+    const retries = 2;
+    const totalTimeout = 1000 * (retries - 1);
+    const [response] = await aspi
+      .get('/500')
+      .setRetry({
+        retries,
+        retryOn: [500],
+        retryDelay: 1000,
+        onRetry: () => {
+          count++;
+        },
+      })
+      .text();
+
+    const totalTime = performance.now() - startTime;
+    expect(response).toBeNull();
+    expect(count).toBe(retries);
+    expect(totalTime).toBeGreaterThanOrEqual(totalTimeout);
+  });
+
+  it('should have exponential backoff', async () => {
+    let count = 0;
+    const startTime = performance.now();
+    const retries = 4;
+    const baseDelay = 10;
+    const [response] = await aspi
+      .get('/500')
+      .setRetry({
+        retries,
+        retryOn: [500],
+        retryDelay: (remaining, total) =>
+          baseDelay * Math.pow(2, total - remaining),
+        onRetry: () => {
+          count++;
+        },
+      })
+      .text();
+
+    const totalTime = performance.now() - startTime;
+    const expectedDelay =
+      baseDelay + baseDelay * 2 + baseDelay * 4 + baseDelay * 8;
+
+    expect(response).toBeNull();
+    expect(count).toBe(retries);
+    expect(totalTime).toBeGreaterThanOrEqual(expectedDelay);
   });
 });

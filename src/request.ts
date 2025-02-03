@@ -58,8 +58,10 @@ export class Request<
   #queryParams?: URLSearchParams;
   #middlewares: Middleware<TRequest, TRequest>[];
   #schema: StandardSchemaV1 | null = null;
+  #bodySchema: StandardSchemaV1 | null = null;
   #retryConfig?: AspiRetryConfig<TRequest>;
   #shouldBeResult: boolean = false;
+  #bodySchemaIssues: StandardSchemaV1.FailureResult['issues'] = [];
 
   constructor(
     method: HttpMethods,
@@ -157,6 +159,24 @@ export class Request<
     return this.setHeader('Authorization', `Bearer ${token}`);
   }
 
+  bodySchema<TSchema extends StandardSchemaV1>(schema: TSchema) {
+    this.#bodySchema = schema;
+    // @ts-ignore
+    return this as Request<
+      Method,
+      TRequest,
+      Omit<Opts, 'bodySchema'> & {
+        bodySchema: TSchema;
+        error: Opts['error'] & {
+          parseError: CustomError<
+            'parseError',
+            StandardSchemaV1.FailureResult['issues']
+          >;
+        };
+      }
+    >;
+  }
+
   /**
    * Sets the request body as JSON by automatically stringifying the provided object.
    * @param body The object to be stringified and sent as the request body
@@ -169,8 +189,21 @@ export class Request<
    *   age: 30
    * });
    */
-  bodyJson<Body extends {}>(body: Body) {
-    this.#localRequestInit.body = JSON.stringify(body);
+  bodyJson<Body extends StandardSchemaV1.InferInput<Opts['bodySchema']>>(
+    body: Body,
+  ) {
+    if (this.#bodySchema) {
+      const data = this.#bodySchema['~standard'].validate(body);
+      if (data instanceof Promise) {
+        throw new Error('Schema validation should not return a promise');
+      }
+
+      if (data.issues) {
+        this.#bodySchemaIssues = data.issues;
+      } else {
+        this.#localRequestInit.body = JSON.stringify(body);
+      }
+    }
     // @ts-ignore
     return this as Request<
       Method,
@@ -182,20 +215,20 @@ export class Request<
   }
 
   /**
-   * Sets the raw request body.
+   * Sets the raw request body (unsafe, use with caution).
    * @param body The body content to send with the request
    * @returns The request instance for chaining
    * @example
    * const request = new Request('/users', config);
-   * request.body(new FormData());
+   * request.unsafeBody(new FormData());
    *
    * // or with raw text
-   * request.body('Hello World');
+   * request.unsafeBody('Hello World');
    *
    * // or with URLSearchParams
-   * request.body(new URLSearchParams({ key: 'value' }));
+   * request.unsafeBody(new URLSearchParams({ key: 'value' }));
    */
-  body(body: BodyInit) {
+  unsafeBody(body: BodyInit) {
     this.#localRequestInit.body = body;
     // @ts-ignore
     return this as Request<
@@ -438,13 +471,15 @@ export class Request<
           ),
         ]
   > {
-    const output = await this.#makeRequest(async (response) =>
-      response.json().catch(
-        (e) =>
-          new CustomError('jsonParseError', {
-            message: e instanceof Error ? e.message : 'Failed to parse JSON',
-          }),
-      ),
+    const output = await this.#makeRequest(
+      async (response) =>
+        response.json().catch(
+          (e) =>
+            new CustomError('jsonParseError', {
+              message: e instanceof Error ? e.message : 'Failed to parse JSON',
+            }),
+        ),
+      true,
     );
 
     // @ts-ignore
@@ -611,6 +646,7 @@ export class Request<
 
   async #makeRequest<T>(
     responseParser: (response: Response) => Promise<any>,
+    isJson: boolean = false,
   ): Promise<
     Result.Result<
       AspiResultOk<TRequest, T>,
@@ -620,11 +656,17 @@ export class Request<
           : never)
     >
   > {
+    // when the body schema fails, return the error. no need to make the request
+    if (this.#bodySchemaIssues.length) {
+      // @ts-ignore
+      return Result.err(new CustomError('parseError', this.#bodySchemaIssues));
+    }
+
     // request in the AspiRequest<RequestInit> format
     const request = this.#request();
 
     // Retry Config
-    const { retries, retryDelay, retryOn, retryWhile } =
+    const { retries, retryDelay, retryOn, retryWhile, onRetry } =
       this.#sanitisedRetryConfig();
 
     try {
@@ -634,7 +676,7 @@ export class Request<
       // URL
       const url = this.#url();
 
-      let attempts = 0;
+      let attempts = 1;
       let response;
       let responseData;
 
@@ -718,6 +760,9 @@ export class Request<
         }
 
         // next retry
+        if (onRetry) {
+          onRetry(request, this.#makeResponse(response!, responseData));
+        }
         attempts++;
       }
 
@@ -747,7 +792,7 @@ export class Request<
         );
       }
 
-      if (this.#schema) {
+      if (isJson && this.#schema) {
         const data = this.#schema['~standard'].validate(responseData);
         if (data instanceof Promise) {
           throw new Error('Schema validation should not return a promise');
@@ -755,10 +800,7 @@ export class Request<
 
         if (data.issues) {
           // @ts-ignore
-          return Result.err({
-            data: data.issues,
-            tag: 'parseError',
-          });
+          return Result.err(new CustomError('parseError', data.issues));
         }
 
         return Result.ok({
@@ -784,10 +826,13 @@ export class Request<
         });
 
         // @ts-ignore
-        return Result.err({
-          data: result,
-          tag: this.#customErrorCbs[500].tag,
-        });
+        return Result.err(
+          new CustomError(
+            // @ts-ignore
+            this.#customErrorCbs[500].tag,
+            result,
+          ),
+        );
       }
 
       return Result.err(
@@ -818,16 +863,18 @@ export class Request<
   }
 
   #sanitisedRetryConfig() {
-    const retries = this.#retryConfig?.retries || 0;
+    const retries = this.#retryConfig?.retries || 1;
     const retryDelay = this.#retryConfig?.retryDelay || 0;
     const retryOn = this.#retryConfig?.retryOn || [];
     const retryWhile = this.#retryConfig?.retryWhile;
+    const onRetry = this.#retryConfig?.onRetry;
 
     return {
       retries,
       retryDelay,
       retryOn,
       retryWhile,
+      onRetry,
     };
   }
 
