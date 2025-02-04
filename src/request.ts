@@ -23,7 +23,6 @@ import type {
 } from './types';
 import * as Result from './result';
 import type { StandardSchemaV1 } from './standard-schema';
-import { Aspi } from './aspi';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -159,6 +158,25 @@ export class Request<
     return this.setHeader('Authorization', `Bearer ${token}`);
   }
 
+  /**
+   * Sets a validation schema for the request body using a StandardSchemaV1 schema.
+   * @template TSchema Type parameter extending StandardSchemaV1
+   * @param schema The schema to validate the body against
+   * @returns The request instance for chaining with updated error type
+   * @example
+   * const userSchema = z.object({
+   *   name: z.string(),
+   *   email: z.string().email()
+   * });
+   *
+   * const request = new Request('/users', config);
+   * request
+   *   .bodySchema(userSchema)
+   *   .bodyJson({
+   *     name: 'John',
+   *     email: 'john@example.com'
+   *   });
+   */
   bodySchema<TSchema extends StandardSchemaV1>(schema: TSchema) {
     this.#bodySchema = schema;
     // @ts-ignore
@@ -253,6 +271,51 @@ export class Request<
    */
   notFound<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
     return this.error('notFoundError', 'NOT_FOUND', cb);
+  }
+
+  /**
+   * Handles 429 Too Many Requests errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.tooManyRequests((error) => {
+   *   console.log('Rate limited:', error);
+   *   return { message: 'Please try again later' };
+   * });
+   */
+  tooManyRequests<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('tooManyRequestsError', 'TOO_MANY_REQUESTS', cb);
+  }
+
+  /**
+   * Handles 400 Bad Request errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.badRequest((error) => {
+   *   console.log('Bad request error:', error);
+   *   return { message: 'Invalid request parameters' };
+   * });
+   */
+  badRequest<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('badRequestError', 'BAD_REQUEST', cb);
+  }
+
+  /**
+   * Handles 409 Conflict errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.conflict((error) => {
+   *   console.log('Conflict error:', error);
+   *   return { message: 'Resource conflict detected' };
+   * });
+   */
+  conflict<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('conflictError', 'CONFLICT', cb);
   }
 
   /**

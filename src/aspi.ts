@@ -1,4 +1,4 @@
-import type { CustomError } from './error';
+import type { AspiResponse, CustomError } from './error';
 import { httpErrors, type HttpErrorStatus, type HttpMethods } from './http';
 import { Request } from './request';
 import type {
@@ -279,14 +279,48 @@ export class Aspi<
   }
 
   /**
-   * Registers a handler for 404 Not Found errors
-   * @param {CustomErrorCb<TRequest, A>} cb - The callback function to handle the error
-   * @returns {Aspi} The Aspi instance for chaining
+   * Handles 404 Not Found errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
    * @example
-   * api.notFound((req, res) => ({ message: 'Resource not found' }));
+   * const request = new Request('/users', config);
+   * request.notFound((error) => {
+   *   console.log('Not found:', error);
+   *   return { message: 'Resource not found' };
+   * });
    */
   notFound<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
     return this.error('notFoundError', 'NOT_FOUND', cb);
+  }
+
+  /**
+   * Handles 429 Too Many Requests errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.tooManyRequests((error) => {
+   *   console.log('Rate limited:', error);
+   *   return { message: 'Please try again later' };
+   * });
+   */
+  tooManyRequests<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('tooManyRequestsError', 'TOO_MANY_REQUESTS', cb);
+  }
+
+  /**
+   * Handles 409 Conflict errors with a custom callback.
+   * @param cb The callback function to handle the error
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * request.conflict((error) => {
+   *   console.log('Conflict error:', error);
+   *   return { message: 'Resource conflict detected' };
+   * });
+   */
+  conflict<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
+    return this.error('conflictError', 'CONFLICT', cb);
   }
 
   /**
