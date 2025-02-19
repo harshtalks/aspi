@@ -1,4 +1,4 @@
-import type { AspiResponse, CustomError } from './error';
+import type { CustomError } from './error';
 import { httpErrors, type HttpErrorStatus, type HttpMethods } from './http';
 import { Request } from './request';
 import type {

@@ -471,30 +471,549 @@ export function catchErrors<T, E extends { tag: string }, Key extends E['tag']>(
 }
 
 /**
- * Creates a chainable pipeline to transform a Result through a series of operations.
- * @param result - The initial Result to transform
- * @param ab - First transformation function to apply to the Result
- * @returns A chainable function with pipe() for adding more transformations and execute() to run the pipeline
+ * Pipes a value through a series of functions from left to right
  * @example
+ * // Pipe a value through multiple transformations
  * pipe(
- *   ok(5),
- *   (a) => ok(a.value * 2)
- * )
- * .pipe(b => ok(b.value + 1))
- * .execute() // { __tag: "ok", value: 11 }
+ *   5,
+ *   x => x * 2,
+ *   x => x + 1
+ * ) // 11
+ *
+ * // Each function receives the result of the previous function
+ * pipe(
+ *   "hello",
+ *   str => str.toUpperCase(),
+ *   str => `${str}!`
+ * ) // "HELLO!"
  */
-export const pipe = <AI, AE, BI, BE>(
-  result: Result<AI, AE>,
-  ab: (a: Result<AI, AE>) => Result<BI, BE>,
-) => {
-  function run(a: Result<AI, AE>) {
-    return ab(a);
+export function pipe<A>(a: A): A;
+export function pipe<A, B = never>(a: A, ab: (a: A) => B): B;
+export function pipe<A, B = never, C = never>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+): C;
+export function pipe<A, B = never, C = never, D = never>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+): D;
+export function pipe<A, B = never, C = never, D = never, E = never>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+): E;
+export function pipe<A, B = never, C = never, D = never, E = never, F = never>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+): F;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+): G;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+): H;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+): I;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+): J;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+): K;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+): L;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+): M;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+): N;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+  O = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+  op: (n: N) => O,
+): O;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+  O = never,
+  P = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+  op: (n: N) => O,
+  pq: (o: O) => P,
+): P;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+  O = never,
+  P = never,
+  Q = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+  op: (n: N) => O,
+  pq: (o: O) => P,
+  qr: (p: P) => Q,
+): Q;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+  O = never,
+  P = never,
+  Q = never,
+  R = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+  op: (n: N) => O,
+  pq: (o: O) => P,
+  qr: (p: P) => Q,
+  rs: (q: Q) => R,
+): R;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+  O = never,
+  P = never,
+  Q = never,
+  R = never,
+  S = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+  op: (n: N) => O,
+  pq: (o: O) => P,
+  qr: (p: P) => Q,
+  rs: (q: Q) => R,
+  st: (r: R) => S,
+): S;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+  O = never,
+  P = never,
+  Q = never,
+  R = never,
+  S = never,
+  T = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+  op: (n: N) => O,
+  pq: (o: O) => P,
+  qr: (p: P) => Q,
+  rs: (q: Q) => R,
+  st: (r: R) => S,
+  tu: (s: S) => T,
+): T;
+export function pipe<
+  A,
+  B = never,
+  C = never,
+  D = never,
+  E = never,
+  F = never,
+  G = never,
+  H = never,
+  I = never,
+  J = never,
+  K = never,
+  L = never,
+  M = never,
+  N = never,
+  O = never,
+  P = never,
+  Q = never,
+  R = never,
+  S = never,
+  T = never,
+  U = never,
+>(
+  a: A,
+  ab: (a: A) => B,
+  bc: (b: B) => C,
+  cd: (c: C) => D,
+  de: (d: D) => E,
+  ef: (e: E) => F,
+  fg: (f: F) => G,
+  gh: (g: G) => H,
+  hi: (h: H) => I,
+  ij: (i: I) => J,
+  kl: (j: J) => K,
+  lm: (k: K) => L,
+  mn: (l: L) => M,
+  no: (m: M) => N,
+  op: (n: N) => O,
+  pq: (o: O) => P,
+  qr: (p: P) => Q,
+  rs: (q: Q) => R,
+  st: (r: R) => S,
+  tu: (s: S) => T,
+  uv: (t: T) => U,
+): U;
+export function pipe(
+  a: unknown,
+  ab?: Function,
+  bc?: Function,
+  cd?: Function,
+  de?: Function,
+  ef?: Function,
+  fg?: Function,
+  gh?: Function,
+  hi?: Function,
+): unknown {
+  switch (arguments.length) {
+    case 1:
+      return a;
+    case 2:
+      return ab!(a);
+    case 3:
+      return bc!(ab!(a));
+    case 4:
+      return cd!(bc!(ab!(a)));
+    case 6:
+      return ef!(de!(cd!(bc!(ab!(a)))));
+    case 7:
+      return fg!(ef!(de!(cd!(bc!(ab!(a))))));
+    case 8:
+      return gh!(fg!(ef!(de!(cd!(bc!(ab!(a)))))));
+    case 9:
+      return hi!(gh!(fg!(ef!(de!(cd!(bc!(ab!(a))))))));
+    default: {
+      let ret = arguments[0];
+      for (let i = 1; i < arguments.length; i++) {
+        ret = arguments[i](ret);
+      }
+      return ret;
+    }
   }
-
-  run.pipe = <CI, CE>(bc: (b: Result<BI, BE>) => Result<CI, CE>) =>
-    pipe(result, (a: Result<AI, AE>) => bc(ab(a)));
-
-  run.execute = () => run(result);
-
-  return run;
-};
+}

@@ -230,18 +230,13 @@ The above response is a Result type. It can be pattern matched using any pattern
 const resultWithoutError = Result.pipe(
   response,
   Result.map((data) => data.data),
-)
-  .pipe(
-    Result.catchError('aspiError', () => {
-      console.log('aspi error');
-    }),
-  )
-  .pipe(
-    Result.catchError('jsonParseError', () =>
-      console.log('failed to parse json error'),
-    ),
-  )
-  .execute();
+  Result.catchError('aspiError', () => {
+    console.log('aspi error');
+  }),
+  Result.catchError('jsonParseError', () =>
+    console.log('failed to parse json error'),
+  ),
+);
 
 // Result<AspiResultOk<AspiRequestInit, { data: any; }>, never>
 ```
