@@ -72,7 +72,7 @@ describe('JSON Response Suite', () => {
         Result.pipe(
           todoResult,
           Result.map((todo) => todo.data.userId),
-        ).execute(),
+        ),
       ).toStrictEqual(Result.ok(1));
     });
   });
