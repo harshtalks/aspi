@@ -1,5 +1,11 @@
 # aspi
 
+## 1.1.0-beta.1
+
+### Minor Changes
+
+- 33d35a3: updated pipe function -> chain instead of method based
+
 ## 1.1.0-beta.0
 
 ### Minor Changes
