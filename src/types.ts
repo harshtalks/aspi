@@ -1,6 +1,20 @@
 import type { AspiRequest, AspiResponse } from './error';
 import type { HttpErrorCodes } from './http';
 
+// Utility types
+export type Prettify<Type> = Type extends Function
+  ? Type
+  : Extract<
+      {
+        [Key in keyof Type]: Type[Key];
+      },
+      Type
+    >;
+
+export type Merge<Object1, Object2> = Prettify<
+  Omit<Object1, keyof Object2> & Object2
+>;
+
 export type AspiConfigBase = {
   baseUrl: string;
   retryConfig?: AspiRetryConfig<AspiRequestInit>;
@@ -47,6 +61,7 @@ export type RequestOptions<TRequest extends AspiRequestInit> = {
   retryConfig?: AspiRetryConfig<TRequest>;
   middlewares?: Middleware<TRequest, TRequest>[];
   errorCbs?: ErrorCallbacks;
+  throwOnError?: boolean;
 };
 
 // Error Callbacks
@@ -63,3 +78,8 @@ export type AspiResultOk<TRequest extends AspiRequestInit, TData> = {
   request: AspiRequest<TRequest>;
   response: AspiResponse;
 };
+
+export type AspiPlainResponse<
+  TRequest extends AspiRequestInit,
+  TData,
+> = AspiResultOk<TRequest, TData>;

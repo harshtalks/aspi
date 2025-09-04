@@ -120,3 +120,13 @@ export interface JSONParseError
       message: string;
     }
   > {}
+
+export const isAspiError = (error: unknown): error is AspiError<any> => {
+  return error instanceof AspiError;
+};
+
+export const isCustomError = (
+  error: unknown,
+): error is CustomError<any, any> => {
+  return error instanceof CustomError;
+};
