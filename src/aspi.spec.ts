@@ -95,6 +95,32 @@ describe('JSON Response Suite', () => {
     });
   });
 
+  describe('Should work well with throwable and result type', async () => {
+    const response = await aspi.get('/todos/1').throwable().withResult().json<{
+      userId: number;
+      id: number;
+      title: string;
+      completed: boolean;
+    }>();
+
+    it('should yield a Result type when used withResult after throwable', () => {
+      expect(response).toHaveProperty('__tag');
+      expect(response).toHaveProperty('__tag', 'ok');
+    });
+
+    const resp = await aspi.get('/todos/1').withResult().throwable().json<{
+      userId: number;
+      id: number;
+      title: string;
+      completed: boolean;
+    }>();
+
+    it('should have todo object when throwable used after withResult', () => {
+      expect(resp.data).toBeDefined();
+      expect(resp.data).toHaveProperty('id', 1);
+    });
+  });
+
   describe('should get a todo - Schema validated', async () => {
     const [todo, todoError] = await aspi
       .get('/todos/1')

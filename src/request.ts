@@ -532,11 +532,15 @@ export class Request<
   throwable() {
     this.#shouldBeResult = false;
     this.#throwOnError = true;
+
+    // @ts-ignore
     return this as Request<
       Method,
       TRequest,
-      Prettify<
-        Opts & {
+      Merge<
+        Omit<Opts, 'withResult' | 'throwable'>,
+        {
+          withResult: false;
           throwable: true;
         }
       >
@@ -550,7 +554,8 @@ export class Request<
    * const request = new Request('/users', config);
    * const result = await request
    *   .setQueryParams({ id: '123' })
-   *   .withResult()
+   *   .
+   withResult()
    *   .notFound((error) => ({ message: 'User not found' }))
    *   .json<User>();
    *
@@ -747,9 +752,10 @@ export class Request<
       Method,
       TRequest,
       Merge<
-        Omit<Opts, 'withResult'>,
+        Omit<Opts, 'withResult' | 'throwable'>,
         {
           withResult: true;
+          throwable: false;
         }
       >
     >;
@@ -769,14 +775,6 @@ export class Request<
     } else {
       return [null, Result.getErrorOrNull(value)];
     }
-  }
-
-  async #makeUnSafeRequest<T>(
-    responseParser: (response: Response) => Promise<any>,
-    isJson: boolean = false,
-  ) {
-    const output = await this.#makeRequest<T>(responseParser, isJson);
-    return Result.getOrThrow(output);
   }
 
   async #makeRequest<T>(
