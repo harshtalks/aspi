@@ -120,3 +120,15 @@ export interface JSONParseError
       message: string;
     }
   > {}
+
+export const isAspiError = <TReq extends AspiRequestInit>(
+  error: unknown,
+): error is AspiError<TReq> => {
+  return error instanceof AspiError;
+};
+
+export const isCustomError = <Tag extends string, A>(
+  error: unknown,
+): error is CustomError<Tag, A> => {
+  return error instanceof CustomError;
+};
