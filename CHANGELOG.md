@@ -1,5 +1,11 @@
 # aspi
 
+## 1.1.0-beta.2
+
+### Minor Changes
+
+- 88e67c7: bodyJSon should work without schema
+
 ## 1.1.0-beta.1
 
 ### Minor Changes
