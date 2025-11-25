@@ -77,6 +77,50 @@ describe('JSON Response Suite', () => {
     });
   });
 
+  describe('Should get a todo - Object', async () => {
+    const todoObject = await aspi.get('/todos/1').throwable().json<{
+      userId: number;
+      id: number;
+      title: string;
+      completed: boolean;
+    }>();
+
+    it('should yield an Ok (success)', () => {
+      expect(todoObject).toBeTruthy();
+    });
+
+    it('should have user id equal to 1', () => {
+      expect(todoObject.data).toBeDefined();
+      expect(todoObject.data).toHaveProperty('id', 1);
+    });
+  });
+
+  describe('Should work well with throwable and result type', async () => {
+    const response = await aspi.get('/todos/1').throwable().withResult().json<{
+      userId: number;
+      id: number;
+      title: string;
+      completed: boolean;
+    }>();
+
+    it('should yield a Result type when used withResult after throwable', () => {
+      expect(response).toHaveProperty('__tag');
+      expect(response).toHaveProperty('__tag', 'ok');
+    });
+
+    const resp = await aspi.get('/todos/1').withResult().throwable().json<{
+      userId: number;
+      id: number;
+      title: string;
+      completed: boolean;
+    }>();
+
+    it('should have todo object when throwable used after withResult', () => {
+      expect(resp.data).toBeDefined();
+      expect(resp.data).toHaveProperty('id', 1);
+    });
+  });
+
   describe('should get a todo - Schema validated', async () => {
     const [todo, todoError] = await aspi
       .get('/todos/1')
@@ -137,7 +181,7 @@ describe('JSON Response Suite', () => {
 
 describe('Error Suite', () => {
   const aspi = new Aspi({
-    baseUrl: 'https://httpstat.us/',
+    baseUrl: 'https://mock.httpstatus.io',
   });
 
   describe('Http Status code errors', () => {
@@ -326,7 +370,7 @@ describe('Schema Suite', () => {
 
 describe('Retry Suite', () => {
   const aspi = new Aspi({
-    baseUrl: 'https://httpstat.us/',
+    baseUrl: 'https://mock.httpstatus.io',
   });
 
   it('should retry 3 times', async () => {
@@ -335,7 +379,7 @@ describe('Retry Suite', () => {
       .get('/500')
       .setRetry({
         retries: 3,
-        retryOn: [500],
+        retryOn: [500, 413],
         onRetry: () => {
           count++;
         },

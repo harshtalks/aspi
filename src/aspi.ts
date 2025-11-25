@@ -7,7 +7,9 @@ import type {
   AspiRetryConfig,
   CustomErrorCb,
   ErrorCallbacks,
+  Merge,
   Middleware,
+  Prettify,
 } from './types';
 
 /**
@@ -33,6 +35,7 @@ export class Aspi<
   #middlewares: Middleware<TRequest, TRequest>[] = [];
   #retryConfig?: AspiRetryConfig<TRequest>;
   #customErrorCbs: ErrorCallbacks = {};
+  #throwOnError = false;
 
   constructor(config: AspiConfig) {
     const { retryConfig, ...requestConfig } = config;
@@ -88,6 +91,7 @@ export class Aspi<
       retryConfig: this.#retryConfig,
       middlewares: this.#middlewares,
       errorCbs: this.#customErrorCbs,
+      throwOnError: this.#throwOnError,
     });
   }
 
@@ -268,13 +272,15 @@ export class Aspi<
 
     return this as Aspi<
       TRequest,
-      Opts & {
-        error: {
-          [K in Tag | keyof Opts['error']]: K extends Tag
-            ? CustomError<Tag, A>
-            : Opts['error'][K];
-        };
-      }
+      Prettify<
+        Opts & {
+          error: {
+            [K in Tag | keyof Opts['error']]: K extends Tag
+              ? CustomError<Tag, A>
+              : Opts['error'][K];
+          };
+        }
+      >
     >;
   }
 
@@ -376,5 +382,28 @@ export class Aspi<
    */
   internalServerError<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
     return this.error('internalServerErrorError', 'INTERNAL_SERVER_ERROR', cb);
+  }
+
+  /**
+   * Sets the aspi to throw an error if the response status is not successful.
+   * @returns The request instance for chaining
+   * @example
+   * const aspi = new Aspi({baseUrl: 'https://example.com'});
+   * const result = await aspi.get('/users')
+   *   .withResult()
+   *   .throwable()
+   *   .json();
+   *
+   */
+  throwable() {
+    this.#throwOnError = true;
+    return this as Aspi<
+      TRequest,
+      Prettify<
+        Opts & {
+          throwable: true;
+        }
+      >
+    >;
   }
 }

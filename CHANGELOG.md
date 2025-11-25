@@ -1,10 +1,18 @@
 # aspi
 
-## 1.1.0-beta.2
+## 1.2.1
+
+### Patch Changes
+
+- cdfbab1: throwable errors
+
+## 1.1.0
 
 ### Minor Changes
 
-- 88e67c7: bodyJSon should work without schema
+- 8d626a1: throwable support
+- 33d35a3: updated pipe function -> chain instead of method based
+- 2b5b067: re releasing the package, major api change, following proper semver, we can delete the prev package as it was not used anywhere.
 
 ## 1.1.0-beta.1
 

@@ -13,16 +13,20 @@ import {
   type HttpMethods,
 } from './http';
 import type {
+  AspiPlainResponse,
   AspiRequestInit,
   AspiResultOk,
   AspiRetryConfig,
   CustomErrorCb,
   ErrorCallbacks,
+  Merge,
   Middleware,
+  Prettify,
   RequestOptions,
 } from './types';
 import * as Result from './result';
 import type { StandardSchemaV1 } from './standard-schema';
+import { Aspi } from './aspi';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -61,6 +65,7 @@ export class Request<
   #retryConfig?: AspiRetryConfig<TRequest>;
   #shouldBeResult: boolean = false;
   #bodySchemaIssues: StandardSchemaV1.FailureResult['issues'] = [];
+  #throwOnError: boolean = false;
 
   constructor(
     method: HttpMethods,
@@ -70,6 +75,7 @@ export class Request<
       retryConfig,
       middlewares,
       errorCbs,
+      throwOnError,
     }: RequestOptions<TRequest>,
   ) {
     this.#path = path;
@@ -77,6 +83,7 @@ export class Request<
     this.#localRequestInit = { ...requestConfig, method: method } as TRequest;
     this.#retryConfig = retryConfig;
     this.#customErrorCbs = errorCbs || {};
+    this.#throwOnError = throwOnError || false;
   }
 
   /**
@@ -228,9 +235,12 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'body'> & {
-        body: Body;
-      }
+      Merge<
+        Omit<Opts, 'body'>,
+        {
+          body: Body;
+        }
+      >
     >;
   }
 
@@ -254,9 +264,12 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'body'> & {
-        body: BodyInit;
-      }
+      Merge<
+        Omit<Opts, 'body'>,
+        {
+          body: BodyInit;
+        }
+      >
     >;
   }
 
@@ -418,13 +431,16 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'error'> & {
-        error: {
-          [K in Tag | keyof Opts['error']]: K extends Tag
-            ? CustomError<Tag, A>
-            : Opts['error'][K];
-        };
-      }
+      Merge<
+        Omit<Opts, 'error'>,
+        {
+          error: {
+            [K in Tag | keyof Opts['error']]: K extends Tag
+              ? CustomError<Tag, A>
+              : Opts['error'][K];
+          };
+        }
+      >
     >;
   }
 
@@ -448,9 +464,12 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'queryParams'> & {
-        qyeryParams: T;
-      }
+      Merge<
+        Omit<Opts, 'queryParams'>,
+        {
+          queryParams: T;
+        }
+      >
     >;
   }
 
@@ -483,15 +502,50 @@ export class Request<
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'schema'> & {
-        schema: TSchema;
-        error: Opts['error'] & {
-          parseError: CustomError<
-            'parseError',
-            StandardSchemaV1.FailureResult['issues']
+      Merge<
+        Omit<Opts, 'schema'>,
+        {
+          schema: TSchema;
+          error: Merge<
+            Opts['error'],
+            {
+              parseError: CustomError<
+                'parseError',
+                StandardSchemaV1.FailureResult['issues']
+              >;
+            }
           >;
-        };
-      }
+        }
+      >
+    >;
+  }
+
+  /**
+   * Sets the request to throw an error if the response status is not successful.
+   * @returns The request instance for chaining
+   * @example
+   * const request = new Request('/users', config);
+   * const result = await request
+   *   .withResult()
+   *   .throwable()
+   *   .json();
+   *
+   */
+  throwable() {
+    this.#shouldBeResult = false;
+    this.#throwOnError = true;
+
+    // @ts-ignore
+    return this as Request<
+      Method,
+      TRequest,
+      Merge<
+        Omit<Opts, 'withResult' | 'throwable'>,
+        {
+          withResult: false;
+          throwable: true;
+        }
+      >
     >;
   }
 
@@ -502,7 +556,8 @@ export class Request<
    * const request = new Request('/users', config);
    * const result = await request
    *   .setQueryParams({ id: '123' })
-   *   .withResult()
+   *   .
+   withResult()
    *   .notFound((error) => ({ message: 'User not found' }))
    *   .json<User>();
    *
@@ -522,19 +577,21 @@ export class Request<
               : never)
           | JSONParseError
         >
-      : [
-          AspiResultOk<TRequest, T> | null,
-          (
-            | (
-                | AspiError<TRequest>
-                | (Opts extends { error: any }
-                    ? Opts['error'][keyof Opts['error']]
-                    : never)
-                | JSONParseError
-              )
-            | null
-          ),
-        ]
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, T>
+        : [
+            AspiResultOk<TRequest, T> | null,
+            (
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                  | JSONParseError
+                )
+              | null
+            ),
+          ]
   > {
     const output = await this.#makeRequest(
       async (response) =>
@@ -577,18 +634,20 @@ export class Request<
               ? Opts['error'][keyof Opts['error']]
               : never)
         >
-      : [
-          AspiResultOk<TRequest, string> | null,
-          (
-            | (
-                | AspiError<TRequest>
-                | (Opts extends { error: any }
-                    ? Opts['error'][keyof Opts['error']]
-                    : never)
-              )
-            | null
-          ),
-        ]
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, string>
+        : [
+            AspiResultOk<TRequest, string> | null,
+            (
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                )
+              | null
+            ),
+          ]
   > {
     const output = await this.#makeRequest<string>((response) =>
       response.text(),
@@ -623,18 +682,20 @@ export class Request<
               ? Opts['error'][keyof Opts['error']]
               : never)
         >
-      : [
-          AspiResultOk<TRequest, Blob> | null,
-          (
-            | (
-                | AspiError<TRequest>
-                | (Opts extends { error: any }
-                    ? Opts['error'][keyof Opts['error']]
-                    : never)
-              )
-            | null
-          ),
-        ]
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, Blob>
+        : [
+            AspiResultOk<TRequest, Blob> | null,
+            (
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                )
+              | null
+            ),
+          ]
   > {
     const output = await this.#makeRequest<Blob>((response) => response.blob());
     // @ts-ignore
@@ -686,20 +747,29 @@ export class Request<
    * }
    */
   withResult() {
+    this.#throwOnError = false;
     this.#shouldBeResult = true;
     // @ts-ignore
     return this as Request<
       Method,
       TRequest,
-      Omit<Opts, 'withResult'> & {
-        withResult: true;
-      }
+      Merge<
+        Omit<Opts, 'withResult' | 'throwable'>,
+        {
+          withResult: true;
+          throwable: false;
+        }
+      >
     >;
   }
 
   #mapResponse<T, E>(value: Result.Result<T, E>) {
     if (this.#shouldBeResult) {
       return value;
+    }
+
+    if (this.#throwOnError) {
+      return Result.getOrThrow(value);
     }
 
     if (Result.isOk(value)) {
