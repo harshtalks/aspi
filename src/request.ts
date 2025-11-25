@@ -221,6 +221,8 @@ export class Request<
       } else {
         this.#localRequestInit.body = JSON.stringify(body);
       }
+    } else {
+      this.#localRequestInit.body = JSON.stringify(body);
     }
     // @ts-ignore
     return this as Request<

@@ -281,6 +281,20 @@ describe('Schema Suite', () => {
     },
   });
 
+  describe('when passed without bodySchema, bodyJson should still work', async () => {
+    const [todo, todoError] = await aspi
+      .post('/todos')
+      .bodyJson({
+        name: 10,
+      })
+      .json();
+
+    it('should yield a value and error as null', () => {
+      expect(todo).toBeDefined();
+      expect(todoError).toBeNull();
+    });
+  });
+
   describe('should yield error when schema fails', async () => {
     const [todo, todoError] = await aspi
       .post('/todos')
