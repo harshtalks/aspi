@@ -1,5 +1,11 @@
 # aspi
 
+## 1.2.1
+
+### Patch Changes
+
+- cdfbab1: throwable errors
+
 ## 1.1.0
 
 ### Minor Changes
