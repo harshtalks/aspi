@@ -1,5 +1,12 @@
 # aspi
 
+## 1.3.0
+
+### Minor Changes
+
+- 88e67c7: bodyJSon should work without schema
+- 5105bce: bodyJson should work without bodySchema
+
 ## 1.2.1
 
 ### Patch Changes
