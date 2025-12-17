@@ -2,14 +2,13 @@ import type { CustomError } from './error';
 import { httpErrors, type HttpErrorStatus, type HttpMethods } from './http';
 import { Request } from './request';
 import type {
-  AspiConfig,
   AspiRequestInit,
   AspiRetryConfig,
   CustomErrorCb,
   ErrorCallbacks,
   Merge,
-  Middleware,
   Prettify,
+  RequestTransformer,
 } from './types';
 
 /**
@@ -32,26 +31,30 @@ export class Aspi<
   Opts extends Record<any, any> = {},
 > {
   #globalRequestInit: TRequest;
-  #middlewares: Middleware<TRequest, TRequest>[] = [];
+  #middlewares: RequestTransformer<TRequest, TRequest>[] = [];
   #retryConfig?: AspiRetryConfig<TRequest>;
   #customErrorCbs: ErrorCallbacks = {};
   #throwOnError = false;
 
-  constructor(config: AspiConfig) {
-    const { retryConfig, ...requestConfig } = config;
-    this.#globalRequestInit = requestConfig as TRequest;
-    this.#retryConfig = retryConfig as unknown as AspiRetryConfig<TRequest>;
+  constructor(config: AspiRequestInit) {
+    this.#globalRequestInit = config as TRequest;
+    this.#retryConfig =
+      config.retryConfig as unknown as AspiRetryConfig<TRequest>;
   }
 
   /**
-   * Sets the base URL for all API requests
-   * @param {string} url - The base URL to be set
-   * @returns {Aspi} The Aspi instance for chaining
+   * Sets or overrides the base URL used for all subsequent API requests.
+   *
+   * Accepts either a string or a `URL` instance. If a `URL` object is provided,
+   * it is converted to its string representation.
+   *
+   * @param url - The new base URL.
+   * @returns The current {@link Aspi} instance for chaining.
    * @example
    * const api = new Aspi({ baseUrl: 'https://api.example.com' });
    * api.setBaseUrl('https://api.newdomain.com');
    */
-  setBaseUrl(url: string) {
+  setBaseUrl(url: string | URL) {
     this.#globalRequestInit.baseUrl = url;
     return this;
   }
@@ -77,16 +80,11 @@ export class Aspi<
     return this;
   }
 
-  #createRequest<M extends HttpMethods>(
-    method: M,
-    path: string,
-    body?: BodyInit,
-  ) {
+  #createRequest<M extends HttpMethods>(method: M, path: string) {
     return new Request<M, TRequest, Opts>(method, path, {
       requestConfig: {
         ...this.#globalRequestInit,
         method,
-        body: body,
       },
       retryConfig: this.#retryConfig,
       middlewares: this.#middlewares,
@@ -108,42 +106,41 @@ export class Aspi<
   }
 
   /**
-   * Makes a POST request to the specified path with an optional body
-   * @param {string} path - The path to make the request to
-   * @param {BodyInit} [body] - The body of the request
-   * @returns {Request} A Request instance for chaining
+   * Makes a POST request to the specified path.
+   *
+   * @param {string} path - The path to make the request to.
+   * @returns {Request} A Request instance for chaining.
+   *
    * @example
    * const api = new Aspi({ baseUrl: 'https://api.example.com' });
-   * const response = await api.post('/users', { name: 'John' }).json();
+   * const response = await api.post('/users').json();
    */
-  post(path: string, body?: BodyInit) {
-    return this.#createRequest('POST', path, body);
+  post(path: string) {
+    return this.#createRequest('POST', path);
   }
 
   /**
-   * Makes a PUT request to the specified path with an optional body
-   * @param {string} path - The path to make the request to
-   * @param {BodyInit} [body] - The body of the request
-   * @returns {Request} A Request instance for chaining
+   * Makes a PUT request to the specified path.
+   * @param {string} path - The path to make the request to.
+   * @returns {Request} A Request instance for chaining.
    * @example
    * const api = new Aspi({ baseUrl: 'https://api.example.com' });
-   * const response = await api.put('/users/1', { name: 'John' }).json();
+   * const response = await api.put('/users/1').json();
    */
-  put(path: string, body?: BodyInit) {
-    return this.#createRequest('PUT', path, body);
+  put(path: string) {
+    return this.#createRequest('PUT', path);
   }
 
   /**
-   * Makes a PATCH request to the specified path with an optional body
-   * @param {string} path - The path to make the request to
-   * @param {BodyInit} [body] - The body of the request
-   * @returns {Request} A Request instance for chaining
+   * Makes a PATCH request to the specified path.
+   * @param {string} path - The path to make the request to.
+   * @returns {Request} A Request instance for chaining.
    * @example
    * const api = new Aspi({ baseUrl: 'https://api.example.com' });
-   * const response = await api.patch('/users/1', { name: 'John' }).json();
+   * const response = await api.patch('/users/1').json();
    */
-  patch(path: string, body?: BodyInit) {
-    return this.#createRequest('PATCH', path, body);
+  patch(path: string) {
+    return this.#createRequest('PATCH', path);
   }
 
   /**
@@ -183,8 +180,9 @@ export class Aspi<
   }
 
   /**
-   * Sets multiple headers for all API requests
-   * @param {Record<string, string>} headers - An object containing header key-value pairs
+   * Sets multiple headers for all API requests. Existing headers are preserved
+   * and new ones are merged, overriding any duplicate keys.
+   * @param {HeadersInit} headers - An object containing header key-value pairs
    * @returns {Aspi} The Aspi instance for chaining
    * @example
    * const api = new Aspi({ baseUrl: 'https://api.example.com' });
@@ -193,23 +191,28 @@ export class Aspi<
    *   'Accept': 'application/json'
    * });
    */
-  setHeaders(headers: Record<string, string>) {
-    this.#globalRequestInit.headers = headers;
+  setHeaders(headers: HeadersInit) {
+    this.#globalRequestInit.headers = {
+      ...(this.#globalRequestInit.headers ?? {}),
+      ...headers,
+    };
     return this;
   }
 
   /**
-   * Sets a single header for all API requests
-   * @param {string} key - The header key
-   * @param {string} value - The header value
-   * @returns {Aspi} The Aspi instance for chaining
+   * Sets a single header for all API requests.
+   *
+   * @param key - The header name.
+   * @param value - The header value.
+   * @returns This {@link Aspi} instance for chaining.
+   *
    * @example
    * const api = new Aspi({ baseUrl: 'https://api.example.com' });
    * api.setHeader('Content-Type', 'application/json');
    */
   setHeader(key: string, value: string) {
     this.#globalRequestInit.headers = {
-      ...this.#globalRequestInit.headers,
+      ...(this.#globalRequestInit.headers ?? {}),
       [key]: value,
     };
     return this;
@@ -228,21 +231,33 @@ export class Aspi<
   }
 
   /**
-   * Use a middleware function to transform requests
-   * @param {Middleware<T, U>} fn - The middleware function to apply
-   * @returns {Aspi<U>} A new Aspi instance with the applied middleware
+   * Register a request‑transformer middleware.
+   *
+   * The supplied function receives the current request initialization object
+   * (`T`) and must return a request initialization of type `U`. The middleware
+   * is added to the internal middleware chain and will be applied to every
+   * request created by this {@link Aspi} instance.
+   *
+   * @template T - The input request type, extending the current {@link Aspi} request init type.
+   * @template U - The output request type after transformation.
+   * @param {RequestTransformer<T, U>} fn - The middleware function that transforms a request configuration.
+   * @returns {Aspi<U>} A new {@link Aspi} instance typed with the transformed request configuration.
    * @example
    * const api = new Aspi({ baseUrl: 'https://api.example.com' });
-   * api.use((req) => {
-   *   // Add custom headers
-   *   req.headers = {
-   *     ...req.headers,
-   *     'x-custom-header': 'custom-value'
+   * const apiWithHeaders = api.use((req) => {
+   *   // Add custom headers to every request
+   *   return {
+   *     ...req,
+   *     headers: {
+   *       ...req.headers,
+   *       'x-custom-header': 'custom-value',
+   *     },
    *   };
-   *   return req;
    * });
    */
-  use<T extends TRequest, U extends TRequest>(fn: Middleware<T, U>): Aspi<U> {
+  use<T extends TRequest, U extends TRequest>(
+    fn: RequestTransformer<T, U>,
+  ): Aspi<U> {
     this.#middlewares = [...this.#middlewares, fn as any];
     return this as unknown as Aspi<U>;
   }

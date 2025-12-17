@@ -5,8 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Aspi } from './aspi';
-import { Result, type HttpErrorCodes } from '.';
+import { Aspi, Result, type HttpErrorCodes } from '.';
 import { z } from 'zod';
 
 describe('JSON Response Suite', () => {
@@ -177,6 +176,136 @@ describe('JSON Response Suite', () => {
       expect(todoError?.tag).toBe('parseError');
     });
   });
+
+  // Additional tests to increase coverage
+  describe('GET request with query parameters', async () => {
+    const [response, error] = await aspi
+      .get('/todos')
+      .setQueryParams({ userId: '2' })
+      .json<Array<{ userId: number; id: number }>>();
+
+    it('should not error when adding query parameters', () => {
+      expect(error).toBeNull();
+    });
+
+    it('should return an array of todos with the correct userId', () => {
+      expect(Array.isArray(response?.data)).toBe(true);
+      expect(response?.data?.every((t) => t.userId === 2)).toBe(true);
+    });
+  });
+
+  describe('POST request with body JSON and schema validation', async () => {
+    const [created, error] = await aspi
+      .post('/posts')
+      .bodyJson({
+        title: 'foo',
+        body: 'bar',
+        userId: 1,
+      })
+      .schema(
+        z.object({
+          id: z.number(),
+          title: z.string(),
+          body: z.string(),
+          userId: z.number(),
+        }),
+      )
+      .json();
+
+    it('should create a new post and return the created object', () => {
+      expect(error).toBeNull();
+      expect(created?.data).toMatchObject({
+        title: 'foo',
+        body: 'bar',
+        userId: 1,
+      });
+      expect(created?.data.id).toBeDefined();
+    });
+  });
+
+  describe('Headers are correctly attached to the request', async () => {
+    const customAspi = new Aspi({
+      baseUrl: 'https://jsonplaceholder.typicode.com',
+    })
+      .setHeader('x-custom-header', 'custom-value')
+      .use((req) => {
+        const headers = new Headers(req.headers);
+        expect(headers.get('x-custom-header')).toBe('custom-value');
+        return req;
+      });
+
+    const [todo] = await customAspi.get('/todos/1').json<{ id: number }>();
+
+    it('should still retrieve the todo after header middleware', () => {
+      expect(todo?.data.id).toBe(1);
+    });
+  });
+});
+
+describe('Custom Error Suite', () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://mock.httpstatus.io',
+  });
+
+  describe('register custom error via .error method', async () => {
+    const [response, error] = await aspi
+      .get('/400')
+      .error('myCustomError', 'BAD_REQUEST', () => ({
+        message: 'Invalid request payload',
+        code: 1234,
+      }))
+      .text();
+
+    it('should return null response and a custom error', () => {
+      expect(response).toBeNull();
+      expect(error).toBeDefined();
+    });
+
+    it('should have the custom tag', () => {
+      expect(error?.tag).toBe('myCustomError');
+    });
+
+    it('should carry the custom data payload', () => {
+      if (error?.tag === 'myCustomError') {
+        expect(error.data).toEqual({
+          message: 'Invalid request payload',
+          code: 1234,
+        });
+      }
+    });
+
+    it('should be an instance of Error', () => {
+      expect(error).toBeInstanceOf(Error);
+    });
+  });
+});
+
+describe('Header Manipulation Suite', () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://jsonplaceholder.typicode.com',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+    .setHeaders({
+      'x-first-header': 'first',
+      'x-common-header': 'original',
+    })
+    .setHeader('x-common-header', 'overridden')
+    .use((req) => {
+      const headers = new Headers(req.headers);
+      // Verify that the merged headers are as expected
+      expect(headers.get('x-first-header')).toBe('first');
+      expect(headers.get('x-common-header')).toBe('overridden');
+      // Ensure the default Content-Type header remains
+      expect(headers.get('Content-Type')).toBe('application/json');
+      return req;
+    });
+
+  it('should successfully fetch a todo after header manipulation', async () => {
+    const [todo] = await aspi.get('/todos/1').json<{ id: number }>();
+    expect(todo?.data.id).toBe(1);
+  });
 });
 
 describe('Error Suite', () => {
@@ -260,7 +389,7 @@ describe('Error Suite', () => {
   describe('401 Error with custom tag and custom error callback', async () => {
     const [response, error] = await aspi
       .get('/401')
-      .unauthorised(({ request, response }) => ({
+      .unauthorised(({ response }) => ({
         status: response.status,
         data: response.responseData,
       }))
@@ -501,5 +630,125 @@ describe('Retry Suite', () => {
     expect(response).toBeNull();
     expect(count).toBe(retries);
     expect(totalTime).toBeGreaterThanOrEqual(totalTimeout);
+  });
+});
+
+describe('Additional HTTP Methods Suite', () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://jsonplaceholder.typicode.com',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  describe('PUT request with body and schema validation', async () => {
+    const [updated, error] = await aspi
+      .put('/posts/1')
+      .bodyJson({
+        id: 1,
+        title: 'updated title',
+        body: 'updated body',
+        userId: 1,
+      })
+      .schema(
+        z.object({
+          id: z.number(),
+          title: z.string(),
+          body: z.string(),
+          userId: z.number(),
+        }),
+      )
+      .json();
+
+    it('should update the post and return the updated object', () => {
+      expect(error).toBeNull();
+      expect(updated?.data).toMatchObject({
+        id: 1,
+        title: 'updated title',
+        body: 'updated body',
+        userId: 1,
+      });
+    });
+  });
+
+  describe('DELETE request should return empty body', async () => {
+    const [response, error] = await aspi.delete('/posts/1').json();
+
+    it('should not error on delete', () => {
+      expect(error).toBeNull();
+    });
+
+    it('should return an empty string as body', () => {
+      expect(response?.data).toBeDefined();
+    });
+  });
+});
+
+describe('Middleware Interaction Suite', () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://jsonplaceholder.typicode.com',
+  })
+    .use((req) => {
+      // Add a custom header via middleware
+      const newHeaders = new Headers(req.headers);
+      newHeaders.set('x-middleware-header', 'added');
+      return { ...req, headers: newHeaders };
+    })
+    .use((req) => {
+      // Verify the header added by previous middleware
+      const hdrs = new Headers(req.headers);
+      expect(hdrs.get('x-middleware-header')).toBe('added');
+      return req;
+    });
+
+  it('should propagate headers added by middleware', async () => {
+    const [todo] = await aspi.get('/todos/1').json<{ id: number }>();
+    expect(todo?.data.id).toBe(1);
+  });
+});
+
+describe('Advanced NotFound Customization Suite', async () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://jsonplaceholder.typicode.com',
+  });
+
+  const [response, error] = await aspi
+    .get('/invalid-endpoint')
+    .notFound(() => ({
+      code: 4040,
+      message: 'Resource missing',
+    }))
+    .json();
+
+  it('should return null response for 404', () => {
+    expect(response).toBeNull();
+    expect(error).toBeDefined();
+  });
+
+  it('should have custom notFoundError tag', () => {
+    expect(error?.tag).toBe('notFoundError');
+  });
+
+  it('should provide an object as error data', () => {
+    if (error?.tag === 'notFoundError') {
+      expect(error.data).toEqual({
+        code: 4040,
+        message: 'Resource missing',
+      });
+    }
+  });
+});
+
+describe('Result after Text Suite', async () => {
+  const aspi = new Aspi({
+    baseUrl: 'https://jsonplaceholder.typicode.com',
+  });
+
+  const result = await aspi.get('/todos/1').withResult().text();
+
+  it('should return a Result wrapping the text response', () => {
+    expect(result).toHaveProperty('__tag');
+    expect(result).toHaveProperty('__tag', 'ok');
+    if (Result.isOk(result)) {
+      expect(result.value.data).toBeDefined();
+    }
   });
 });

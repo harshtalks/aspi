@@ -1,38 +1,5 @@
-import type { HttpErrorCodes, HttpErrorStatus } from './http';
-import type { AspiRequestInit, AspiRetryConfig } from './types';
-
-/**
- * Response interface used in error handling
- * @interface AspiResponse
- * @property {HttpErrorCodes} status - The HTTP status code of the response
- * @property {HttpErrorStatus} statusText - The HTTP status text of the response
- * @property {Response} [response] - Optional raw Response object
- * @property {any} [responseData] - Optional response data content
- */
-export interface AspiResponse {
-  status: HttpErrorCodes;
-  statusText: HttpErrorStatus;
-  response?: Response;
-  responseData?: any;
-}
-
-/**
- * Interface representing an API request configuration
- * @interface AspiRequest
- * @template T - Request initialization options type extending AspiRequestInit
- * @property {string} baseUrl - Base URL for the API request
- * @property {string} path - Request path to append to baseUrl
- * @property {T} requestInit - Request initialization options
- * @property {URLSearchParams | null} queryParams - URL query parameters, if any
- * @property {AspiRetryConfig<T>} retryConfig - Retry configuration for failed requests
- */
-export interface AspiRequest<T extends AspiRequestInit> {
-  baseUrl: string;
-  path: string;
-  requestInit: T;
-  queryParams: URLSearchParams | null;
-  retryConfig: AspiRetryConfig<T>;
-}
+import type { HttpErrorStatus } from './http';
+import type { AspiRequest, AspiRequestInit, AspiResponse } from './types';
 
 /**
  * Custom error class for API errors
@@ -42,10 +9,10 @@ export interface AspiRequest<T extends AspiRequestInit> {
  * @property {AspiRe} request - The original request configuration
  * @property {AspiResponse} response - The error response details
  */
-export class AspiError<TReq extends AspiRequestInit> extends Error {
+export class AspiError<TRequest extends AspiRequestInit> extends Error {
   tag = 'aspiError' as const;
-  request: AspiRequest<TReq>;
-  response: AspiResponse;
+  request: AspiRequest<TRequest>;
+  response: AspiResponse<any, false>;
 
   /**
    * Creates an instance of AspiError
@@ -55,7 +22,7 @@ export class AspiError<TReq extends AspiRequestInit> extends Error {
    */
   constructor(
     message: string,
-    request: AspiRequest<TReq>,
+    request: AspiRequest<TRequest>,
     response: AspiResponse,
   ) {
     super(message);
@@ -72,7 +39,10 @@ export class AspiError<TReq extends AspiRequestInit> extends Error {
    */
   ifMatch<T>(
     status: HttpErrorStatus,
-    cb: (args: { request: AspiRequest<TReq>; response: AspiResponse }) => T,
+    cb: (args: {
+      request: AspiRequest<TRequest>;
+      response: AspiResponse<any, false>;
+    }) => T,
   ) {
     if (this.response.statusText === status) {
       return cb({
@@ -124,7 +94,7 @@ export interface JSONParseError
 export const isAspiError = <TReq extends AspiRequestInit>(
   error: unknown,
 ): error is AspiError<TReq> => {
-  return error instanceof AspiError;
+  return error instanceof AspiError && error.tag === 'aspiError';
 };
 
 export const isCustomError = <Tag extends string, A>(
