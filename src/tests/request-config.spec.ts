@@ -473,18 +473,20 @@ describe('Request – AbortController and request cancellation', () => {
 
   it('allows reusing same AbortController across multiple requests', async () => {
     const fetchMock = vi.mocked(global.fetch);
-    fetchMock.mockResolvedValue(createMockResponse({ success: true }));
+    // Resolve each fetch call with a fresh mock response
+    fetchMock
+      .mockResolvedValueOnce(createMockResponse({ success: true }))
+      .mockResolvedValueOnce(createMockResponse({ success: true }));
 
     const controller = new AbortController();
-    const config = createRequestOptions({
-      requestConfig: {
-        ...createBaseConfig(),
-        signal: controller.signal,
-      },
-    });
 
-    const req1 = new Request('GET', '/users/1', config);
-    const req2 = new Request('GET', '/users/2', config);
+    // Build two separate request option objects that share the same AbortSignal
+    const baseConfig = { ...createBaseConfig(), signal: controller.signal };
+    const config1 = createRequestOptions({ requestConfig: baseConfig });
+    const config2 = createRequestOptions({ requestConfig: baseConfig });
+
+    const req1 = new Request('GET', '/users/1', config1);
+    const req2 = new Request('GET', '/users/2', config2);
 
     const [result1] = await req1.json();
     const [result2] = await req2.json();

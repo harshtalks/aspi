@@ -691,16 +691,24 @@ export class Request<
             ),
           ]
   > {
-    const output = await this.#makeRequest(
-      async (response) =>
-        response.json().catch(
-          (e) =>
-            new CustomError('jsonParseError', {
-              message: e instanceof Error ? e.message : 'Failed to parse JSON',
-            }),
-        ),
-      true,
-    );
+    const output = await this.#makeRequest(async (response) => {
+      // Treat 204 No Content and any 3xx response as having no JSON payload.
+      if (
+        response.status === 204 ||
+        (response.status >= 300 && response.status < 400)
+      ) {
+        // Return null (or undefined) to indicate absence of body.
+        // The surrounding type handling will accommodate the null value.
+        return null;
+      }
+      // Normal JSON parsing with error handling.
+      return response.json().catch(
+        (e) =>
+          new CustomError('jsonParseError', {
+            message: e instanceof Error ? e.message : 'Failed to parse JSON',
+          }),
+      );
+    }, true);
 
     // @ts-ignore
     return this.#mapResponse(output);
@@ -779,9 +787,9 @@ export class Request<
             ),
           ]
   > {
-    const output = await this.#makeRequest<string>((response) =>
-      response.text(),
-    );
+    const output = await this.#makeRequest<string>((response) => {
+      return response.text();
+    });
     // @ts-ignore
     return this.#mapResponse(output);
   }
@@ -982,6 +990,10 @@ export class Request<
     }
   }
 
+  #isSuccessResponse(response: Response) {
+    return response.ok || (response.status >= 300 && response.status < 400);
+  }
+
   async #makeRequest<T>(
     responseParser: (response: Response) => Promise<any>,
     isJson: boolean = false,
@@ -1028,8 +1040,8 @@ export class Request<
 
           responseData = await responseParser(response);
 
-          if (responseData instanceof CustomError) {
-            // we can break out of loop now with the error -> ex. JSON Parsing Error
+          if (responseData instanceof Error) {
+            // we can break out of loop now with the error → e.g. JSON Parsing Error
             // @ts-ignore
             return Result.err(responseData);
           }
@@ -1043,7 +1055,7 @@ export class Request<
             : false;
 
           if (
-            response.ok ||
+            this.#isSuccessResponse(response) ||
             (!retryOn.includes(response.status as HttpErrorCodes) &&
               !retryWhileCondition)
           ) {
@@ -1069,7 +1081,7 @@ export class Request<
           }
 
           if (attempts < retries) {
-            // Delaying the next retry
+            // Delaying the next retry (abort‑aware)
             const delay =
               typeof retryDelay === 'function'
                 ? await retryDelay(
@@ -1080,12 +1092,12 @@ export class Request<
                   )
                 : retryDelay;
 
-            // delaying retry
-            await new Promise((resolve) => setTimeout(resolve, delay));
+            await this.#abortDelay(delay, request);
           }
         } catch (e) {
           // Abort handling – stop all further retries and fail immediately
           if (e instanceof Error && e.name === 'AbortError') {
+            // If a custom 500 handler exists, honor it
             if (500 in this.#customErrorCbs) {
               const result = this.#customErrorCbs[response.status].cb({
                 request,
@@ -1114,7 +1126,7 @@ export class Request<
           // max retry
           if (attempts === retries) throw e;
 
-          // delay for retry
+          // delay for retry (abort‑aware)
           const delay =
             typeof retryDelay === 'function'
               ? await retryDelay(
@@ -1125,17 +1137,17 @@ export class Request<
                 )
               : retryDelay;
 
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          await this.#abortDelay(delay, request);
         }
 
-        // next retry
+        // next retry callback
         if (onRetry) {
           onRetry(request, this.#makeResponse(response, responseData));
         }
         attempts++;
       }
 
-      if (!response.ok) {
+      if (!this.#isSuccessResponse(response)) {
         if (response.status in this.#customErrorCbs) {
           const result = this.#customErrorCbs[response.status].cb({
             request,
@@ -1215,6 +1227,27 @@ export class Request<
         ),
       );
     }
+  }
+
+  #abortDelay(ms: number, request: AspiRequest<TRequest>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, ms);
+      const signal = request.requestInit.signal;
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(timer);
+          reject(new DOMException('The user aborted a request.', 'AbortError'));
+        } else {
+          const abortHandler = () => {
+            clearTimeout(timer);
+            reject(
+              new DOMException('The user aborted a request.', 'AbortError'),
+            );
+          };
+          signal.addEventListener('abort', abortHandler, { once: true });
+        }
+      }
+    });
   }
 
   #request(): AspiRequest<TRequest> {
