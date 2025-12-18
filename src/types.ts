@@ -49,19 +49,30 @@ export type AspiConfigBase = {
   retryConfig?: AspiRetryConfig<AspiRequestInit>;
 };
 /**
- * Configuration for an Aspi instance.
+ * Configuration for an Aspi instance (without request body).
  *
- * This type includes all parameters that can be passed during Aspi initialization.
- * It merges selected `RequestInit` properties (`headers` and `mode`) with the base
- * Aspi configuration defined in {@link AspiConfigBase}.
+ * This type includes all standard `RequestInit` properties
+ * (`headers`, `mode`, `credentials`, `cache`, `redirect`,
+ * `referrer`, `referrerPolicy`, `integrity`, `keepalive`, `signal`)
+ * merged with the base Aspi configuration defined in {@link AspiConfigBase}.
  *
- * @extends Merge<Pick<RequestInit, 'headers' | 'mode'>, AspiConfigBase>
+ * @extends Merge<Pick<RequestInit,
+ *   | 'headers'
+ *   | 'mode'
+ *   | 'credentials'
+ *   | 'cache'
+ *   | 'redirect'
+ *   | 'referrer'
+ *   | 'referrerPolicy'
+ *   | 'integrity'
+ *   | 'keepalive'
+ *   | 'signal'>,
+ *   AspiConfigBase>
  */
-export interface AspiRequestInit
+export interface AspiRequestInitWithoutBodyAndMethod
   extends Merge<
     Pick<
       RequestInit,
-      | 'method'
       | 'headers'
       | 'mode'
       | 'credentials'
@@ -77,16 +88,19 @@ export interface AspiRequestInit
   > {}
 
 /**
- * Configuration for an Aspi request that also includes a request body.
+ * Configuration for an Aspi request that may include a request body.
  *
- * Extends {@link AspiRequestInit} with the optional `body` property from the native
- * {@link RequestInit} type.
+ * Extends {@link AspiRequestInitWithoutBody} with the optional `body`
+ * property from the native {@link RequestInit} type.
  *
  * @template TBody - The type of the request body (defaults to `any`).
- * @extends Merge<Pick<RequestInit, 'body'>, AspiRequestInit>
+ * @extends Merge<Pick<RequestInit, 'body'>, AspiRequestInitWithoutBody>
  */
-export interface AspiRequestInitWithBody
-  extends Merge<Pick<RequestInit, 'body'>, AspiRequestInit> {}
+export interface AspiRequestInit<TBody = any>
+  extends Merge<
+    Pick<RequestInit, 'body' | 'method'>,
+    Omit<AspiRequestInitWithoutBodyAndMethod, 'retryConfig'>
+  > {}
 
 /**
  * Configuration options for retrying an Aspi request.
@@ -175,13 +189,24 @@ export type RequestTransformer<
   U extends AspiRequestInit,
 > = (request: T) => U;
 
-// Aspi Instance
+/**
+ * Options for configuring an Aspi request.
+ *
+ * @template TRequest - The request initialization type extending {@link AspiRequestInit}.
+ * @property {TRequest} requestConfig - The request configuration object.
+ * @property {AspiRetryConfig<TRequest>} [retryConfig] - Optional retry configuration applied to the request.
+ * @property {RequestTransformer<TRequest, TRequest>[]} [middlewares] - Optional list of request transformers that act as middleware.
+ * @property {ErrorCallbacks} [errorCbs] - Optional collection of custom error callbacks keyed by HTTP status code.
+ * @property {boolean} [throwOnError] - When `true`, the request will throw on error instead of returning an error result.
+ * @property {boolean} [shouldBeResult] - When `true`, the request returns an {@link AspiResultOk} instead of a raw response.
+ */
 export type RequestOptions<TRequest extends AspiRequestInit> = {
   requestConfig: TRequest;
   retryConfig?: AspiRetryConfig<TRequest>;
   middlewares?: RequestTransformer<TRequest, TRequest>[];
   errorCbs?: ErrorCallbacks;
   throwOnError?: boolean;
+  shouldBeResult?: boolean;
 };
 
 /**

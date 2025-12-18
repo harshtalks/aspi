@@ -3,6 +3,7 @@ import { httpErrors, type HttpErrorStatus, type HttpMethods } from './http';
 import { Request } from './request';
 import type {
   AspiRequestInit,
+  AspiRequestInitWithoutBodyAndMethod,
   AspiRetryConfig,
   CustomErrorCb,
   ErrorCallbacks,
@@ -35,11 +36,12 @@ export class Aspi<
   #retryConfig?: AspiRetryConfig<TRequest>;
   #customErrorCbs: ErrorCallbacks = {};
   #throwOnError = false;
+  #shouldBeResult = false;
 
-  constructor(config: AspiRequestInit) {
-    this.#globalRequestInit = config as TRequest;
-    this.#retryConfig =
-      config.retryConfig as unknown as AspiRetryConfig<TRequest>;
+  constructor(config: AspiRequestInitWithoutBodyAndMethod) {
+    const { retryConfig, ...requestInit } = config;
+    this.#globalRequestInit = requestInit as unknown as TRequest;
+    this.#retryConfig = retryConfig;
   }
 
   /**
@@ -86,10 +88,11 @@ export class Aspi<
         ...this.#globalRequestInit,
         method,
       },
-      retryConfig: this.#retryConfig,
       middlewares: this.#middlewares,
       errorCbs: this.#customErrorCbs,
       throwOnError: this.#throwOnError,
+      shouldBeResult: this.#shouldBeResult,
+      retryConfig: this.#retryConfig,
     });
   }
 
@@ -412,11 +415,33 @@ export class Aspi<
    */
   throwable() {
     this.#throwOnError = true;
-    return this as Aspi<
+    this.#shouldBeResult = false;
+    return this as unknown as Aspi<
       TRequest,
-      Prettify<
-        Opts & {
+      Merge<
+        Omit<Opts, 'withResult' | 'throwable'>,
+        {
+          withResult: false;
           throwable: true;
+        }
+      >
+    >;
+  }
+
+  /**
+   * Configures the request to return a Result object instead of just the response body.
+   * @returns The Aspi instance with result handling enabled.
+   */
+  withResult() {
+    this.#shouldBeResult = true;
+    this.#throwOnError = false;
+    return this as unknown as Aspi<
+      TRequest,
+      Merge<
+        Omit<Opts, 'withResult' | 'throwable'>,
+        {
+          withResult: true;
+          throwable: false;
         }
       >
     >;

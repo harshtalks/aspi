@@ -10,7 +10,6 @@ import type {
   AspiPlainResponse,
   AspiRequest,
   AspiRequestInit,
-  AspiRequestInitWithBody,
   AspiResponse,
   AspiResultOk,
   AspiRetryConfig,
@@ -23,6 +22,7 @@ import type {
 } from './types';
 import * as Result from './result';
 import type { StandardSchemaV1 } from './standard-schema';
+import { Aspi } from './aspi';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -46,7 +46,7 @@ import type { StandardSchemaV1 } from './standard-schema';
  */
 export class Request<
   Method extends HttpMethods,
-  TRequest extends AspiRequestInitWithBody = AspiRequestInit,
+  TRequest extends AspiRequestInit = AspiRequestInit,
   Opts extends Record<any, any> = {
     error: {};
   },
@@ -66,20 +66,18 @@ export class Request<
   constructor(
     method: HttpMethods,
     path: string,
-    {
-      requestConfig,
-      retryConfig,
-      middlewares,
-      errorCbs,
-      throwOnError,
-    }: RequestOptions<TRequest>,
+    requestOptions: RequestOptions<TRequest>,
   ) {
     this.#path = path;
-    this.#middlewares = middlewares || [];
-    this.#localRequestInit = { ...requestConfig, method: method } as TRequest;
-    this.#retryConfig = retryConfig;
-    this.#customErrorCbs = errorCbs || {};
-    this.#throwOnError = throwOnError || false;
+    this.#middlewares = requestOptions.middlewares || [];
+    this.#localRequestInit = {
+      ...requestOptions.requestConfig,
+      method: method,
+    };
+    this.#retryConfig = requestOptions.retryConfig;
+    this.#customErrorCbs = requestOptions.errorCbs || {};
+    this.#throwOnError = requestOptions.throwOnError || false;
+    this.#shouldBeResult = requestOptions.shouldBeResult || false;
   }
 
   /**
@@ -430,7 +428,7 @@ export class Request<
    *
    * // Attach a custom handler for a 400 Bad Request response
    * request
-   *   .withResult()
+   *  withResult()
    *   .error('customError', 'BAD_REQUEST', (ctx) => {
    *     console.log('Bad request error:', ctx);
    *     return {
@@ -1009,6 +1007,8 @@ export class Request<
     const { retries, retryDelay, retryOn, retryWhile, onRetry } =
       this.#sanitisedRetryConfig();
 
+    console.log(this.#sanitisedRetryConfig());
+
     try {
       // request init with certain extra properties
       const requestInit = request.requestInit;
@@ -1225,5 +1225,75 @@ export class Request<
       statusText: getHttpErrorStatus(response.status as HttpErrorCodes),
       responseData,
     };
+  }
+
+  /**
+   * Returns the underlying {@link AspiRequest} object that will be used for the fetch call.
+   *
+   * This method does not perform any network activity; it simply builds and returns the
+   * request configuration, including any applied middlewares, query parameters, etc.
+   *
+   * @returns {AspiRequest<TRequest>} The constructed request object.
+   */
+  getRequest(): AspiRequest<TRequest> {
+    return this.#request();
+  }
+
+  /**
+   * Retrieves the registry of custom error callbacks that have been
+   * registered via {@link error}. The returned object maps HTTP status
+   * codes to their corresponding callback functions and tags.
+   *
+   * @returns {ErrorCallbacks} A shallow copy of the internal error callback registry.
+   */
+  public getErrorCallbackRegistry(): ErrorCallbacks {
+    // Return a shallow copy to prevent external mutation of the private registry.
+    return { ...this.#customErrorCbs };
+  }
+  /**
+   * Returns whether the request is configured to return a {@link Result.Result}
+   * instead of the default tuple or throwing.
+   *
+   * @returns {boolean} `true` when {@link withResult} has been called.
+   */
+  isResult(): boolean {
+    return this.#shouldBeResult;
+  }
+
+  /**
+   * Returns whether the request is configured to throw on HTTP errors.
+   *
+   * @returns {boolean} `true` when {@link throwable} has been called.
+   */
+  isThrowable(): boolean {
+    return this.#throwOnError;
+  }
+
+  /**
+   * Returns the effective retry configuration for this request, including defaulted values.
+   *
+   * The returned object contains:
+   * - `retries` – number of retry attempts (default 1)
+   * - `retryDelay` – delay between attempts in milliseconds or a function that returns a delay
+   * - `retryOn` – array of HTTP status codes that should trigger a retry
+   * - `retryWhile` – optional custom predicate executed after each response
+   * - `onRetry` – optional callback invoked after a retry attempt
+   *
+   * A shallow copy is returned to avoid accidental mutation of the internal state.
+   *
+   * @returns {{
+   *   retries: number;
+   *   retryDelay: number | ((attempt: number, maxAttempts: number, request: AspiRequest<TRequest>, response: AspiResponse<any, true>) => number);
+   *   retryOn: number[];
+   *   retryWhile?: (request: AspiRequest<TRequest>, response: AspiResponse<any, true>) => boolean | Promise<boolean>;
+   *   onRetry?: (request: AspiRequest<TRequest>, response: AspiResponse<any, true>) => void;
+   * }}
+   */
+  getRetryConfig() {
+    // Use the internal sanitisation logic to ensure defaults are applied.
+    // @ts-ignore
+    const cfg = this.#sanitisedRetryConfig();
+    // Return a shallow copy so callers cannot mutate private state.
+    return { ...cfg };
   }
 }
