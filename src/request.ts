@@ -1015,8 +1015,12 @@ export class Request<
       const url = this.#url();
 
       let attempts = 1;
-      let response;
-      let responseData;
+      let response: Response = new Response(null, {
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+
+      let responseData = null;
 
       while (attempts <= retries) {
         try {
@@ -1080,6 +1084,33 @@ export class Request<
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
         } catch (e) {
+          // Abort handling – stop all further retries and fail immediately
+          if (e instanceof Error && e.name === 'AbortError') {
+            if (500 in this.#customErrorCbs) {
+              const result = this.#customErrorCbs[response.status].cb({
+                request,
+                response: this.#makeResponse(response, responseData),
+              });
+
+              // @ts-ignore
+              return Result.err(
+                new CustomError(
+                  // @ts-ignore
+                  this.#customErrorCbs[response.status].tag,
+                  result,
+                ),
+              );
+            }
+
+            return Result.err(
+              new AspiError(
+                e.message,
+                this.#request(),
+                this.#makeResponse(response, responseData),
+              ),
+            );
+          }
+
           // max retry
           if (attempts === retries) throw e;
 
@@ -1090,7 +1121,7 @@ export class Request<
                   retries - attempts - 1,
                   retries,
                   request,
-                  this.#makeResponse(response!, responseData),
+                  this.#makeResponse(response, responseData),
                 )
               : retryDelay;
 
@@ -1099,23 +1130,23 @@ export class Request<
 
         // next retry
         if (onRetry) {
-          onRetry(request, this.#makeResponse(response!, responseData));
+          onRetry(request, this.#makeResponse(response, responseData));
         }
         attempts++;
       }
 
-      if (!response!.ok) {
-        if (response!.status in this.#customErrorCbs) {
-          const result = this.#customErrorCbs[response!.status].cb({
+      if (!response.ok) {
+        if (response.status in this.#customErrorCbs) {
+          const result = this.#customErrorCbs[response.status].cb({
             request,
-            response: this.#makeResponse(response!, responseData),
+            response: this.#makeResponse(response, responseData),
           });
 
           // @ts-ignore
           return Result.err(
             new CustomError(
               // @ts-ignore
-              this.#customErrorCbs[response!.status].tag,
+              this.#customErrorCbs[response.status].tag,
               result,
             ),
           );
@@ -1123,9 +1154,9 @@ export class Request<
 
         return Result.err(
           new AspiError(
-            response!.statusText,
+            response.statusText,
             this.#request(),
-            this.#makeResponse(response!, responseData),
+            this.#makeResponse(response, responseData),
           ),
         );
       }
@@ -1144,14 +1175,14 @@ export class Request<
         return Result.ok({
           data: data.value as T,
           request,
-          response: this.#makeResponse(response!, responseData),
+          response: this.#makeResponse(response, responseData),
         });
       }
 
       return Result.ok({
         data: responseData as T,
         request,
-        response: this.#makeResponse(response!, responseData),
+        response: this.#makeResponse(response, responseData),
       });
     } catch (error) {
       if (500 in this.#customErrorCbs) {
@@ -1185,6 +1216,7 @@ export class Request<
       );
     }
   }
+
   #request(): AspiRequest<TRequest> {
     let requestInit = this.#localRequestInit;
     for (const middleware of this.#middlewares) {
