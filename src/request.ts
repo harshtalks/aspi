@@ -1007,8 +1007,6 @@ export class Request<
     const { retries, retryDelay, retryOn, retryWhile, onRetry } =
       this.#sanitisedRetryConfig();
 
-    console.log(this.#sanitisedRetryConfig());
-
     try {
       // request init with certain extra properties
       const requestInit = request.requestInit;
