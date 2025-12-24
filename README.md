@@ -1,4 +1,3 @@
-
 # Aspi
 
 A tiny, type‑safe wrapper around the native **fetch** API that gives you a clean, monadic interface for HTTP requests.
@@ -17,19 +16,19 @@ It ships with **zero runtime dependencies**, a **tiny bundle size**, and full **
 ## Installation
 
 npm
-    ```bash
+`bash
     npm install aspi
-    ```
+    `
 
 yarn
-    ```bash
+`bash
     yarn add aspi
-    ```
+    `
 
 pnpm
-    ```bash
+`bash
     pnpm add aspi
-    ```
+    `
 
 ---
 
@@ -76,7 +75,7 @@ async function getTodoResult(id: number) {
   const response = await api
     .get(`/todos/${id}`)
     .notFound(() => ({ message: 'Todo not found' }))
-    .withResult()                                 // enable Result mode
+    .withResult() // enable Result mode
     .json<{ id: number; title: string; completed: boolean }>();
 
   Result.match(response, {
@@ -95,7 +94,7 @@ async function getTodoResult(id: number) {
 
 The `throwable()` toggle makes a request **throw** on any non‑2xx HTTP response, allowing you to use the familiar `try / catch` pattern instead of dealing with tuples or `Result` objects.
 
-When a request is in *throwable* mode, the body‑parser methods (`json()`, `text()`, `blob()`) resolve with the parsed value directly. If the response status indicates an error, the promise is rejected with a typed Aspi error (e.g., `aspiError`, `unauthorisedError`, `jsonParseError`, …).
+When a request is in _throwable_ mode, the body‑parser methods (`json()`, `text()`, `blob()`) resolve with the parsed value directly. If the response status indicates an error, the promise is rejected with a typed Aspi error (e.g., `aspiError`, `unauthorisedError`, `jsonParseError`, …).
 
 #### Basic usage
 
@@ -104,7 +103,7 @@ When a request is in *throwable* mode, the body‑parser methods (`json()`, `tex
 try {
   const todo = await api
     .get('/todos/1')
-    .throwable()      // <─ enable throwable mode
+    .throwable() // <─ enable throwable mode
     .json<{ id: number; title: string; completed: boolean }>(); // returns the parsed JSON
 
   console.log('✅ Todo:', todo);
@@ -122,21 +121,21 @@ try {
 
 #### Interaction with `withResult()`
 
-`throwable()` and `withResult()` are *mutually exclusive* – the last toggle applied wins.
+`throwable()` and `withResult()` are _mutually exclusive_ – the last toggle applied wins.
 
 ```ts
 // Result mode wins (throwable is ignored)
 const result = await api
   .post('/login')
-  .withResult()   // enables Result mode
-  .throwable()    // ignored because withResult was called later
+  .withResult() // enables Result mode
+  .throwable() // ignored because withResult was called later
   .json<{ token: string }>();
 
 // Throwable mode wins (Result is ignored)
 const data = await api
   .get('/profile')
-  .throwable()    // enables throwable mode
-  .withResult()   // ignored because throwable was called later
+  .throwable() // enables throwable mode
+  .withResult() // ignored because throwable was called later
   .json();
 ```
 
@@ -147,7 +146,6 @@ const data = await api
 - You are integrating Aspi into existing codebases that already rely on exception handling.
 
 `throwable()` gives you the flexibility to choose the error‑handling style that best fits your project.
-
 
 ## Schema validation (Zod example)
 
@@ -169,7 +167,7 @@ async function getValidatedTodo(id: number) {
         id: z.number(),
         title: z.string(),
         completed: z.boolean(),
-      })
+      }),
     )
     .json(); // type inferred from the schema
 
@@ -197,8 +195,8 @@ const api = new Aspi({
   headers: { 'Content-Type': 'application/json' },
 }).setRetry({
   retries: 3,
-  retryDelay: 1000,               // simple fixed delay
-  retryOn: [404, 500],            // retry on specific status codes
+  retryDelay: 1000, // simple fixed delay
+  retryOn: [404, 500], // retry on specific status codes
 });
 
 // Override retry options for a single request
@@ -215,7 +213,7 @@ api
     Result.match(res, {
       onOk: (data) => console.log('Got data', data),
       onErr: (err) => console.error('Failed', err),
-    })
+    }),
   );
 ```
 
@@ -223,19 +221,19 @@ api
 
 ## Global configuration helpers
 
-| Method | Description |
-| ------ | ----------- |
-| `setBaseUrl(url)` | Change the base URL for all subsequent requests. |
-| `setHeaders(headers)` | Merge an object of headers with any existing ones. |
-| `setHeader(key, value)` | Set a single header. |
-| `setBearer(token)` | Shortcut for `Authorization: Bearer <token>`. |
-| `setRetry(retryConfig)` | Define a global retry strategy (overridable per request). |
-| `setQueryParams(params)` | Replace the request’s query string – accepts object, `URLSearchParams`, array of tuples, or raw string. |
-| `schema(schema)` | Attach a `StandardSchemaV1` validator for the response body. |
-| `use(fn)` | Register a request‑transformer middleware that receives the current `RequestInit` and returns a new one. Returns a new `Aspi` instance typed with the transformed config. |
-| `withResult()` | Switch the request into Result mode (returns a `Result` instead of a tuple). |
-| `throwable()` | Make the request throw on non‑2xx responses (useful for `try / catch` patterns). |
-| `url()` | Get the fully‑qualified URL that will be used for the request. |
+| Method                   | Description                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setBaseUrl(url)`        | Change the base URL for all subsequent requests.                                                                                                                          |
+| `setHeaders(headers)`    | Merge an object of headers with any existing ones.                                                                                                                        |
+| `setHeader(key, value)`  | Set a single header.                                                                                                                                                      |
+| `setBearer(token)`       | Shortcut for `Authorization: Bearer <token>`.                                                                                                                             |
+| `setRetry(retryConfig)`  | Define a global retry strategy (overridable per request).                                                                                                                 |
+| `setQueryParams(params)` | Replace the request’s query string – accepts object, `URLSearchParams`, array of tuples, or raw string.                                                                   |
+| `schema(schema)`         | Attach a `StandardSchemaV1` validator for the response body.                                                                                                              |
+| `use(fn)`                | Register a request‑transformer middleware that receives the current `RequestInit` and returns a new one. Returns a new `Aspi` instance typed with the transformed config. |
+| `withResult()`           | Switch the request into Result mode (returns a `Result` instead of a tuple).                                                                                              |
+| `throwable()`            | Make the request throw on non‑2xx responses (useful for `try / catch` patterns).                                                                                          |
+| `url()`                  | Get the fully‑qualified URL that will be used for the request.                                                                                                            |
 
 ---
 
@@ -257,33 +255,34 @@ api
 Convenient shortcuts are provided for the most common statuses (each forwards to `error` internally and augments the generic `Opts['error']` type):
 
 ```ts
-api.notFound(cb)               // 404
-api.tooManyRequests(cb)        // 429
-api.conflict(cb)               // 409
-api.badRequest(cb)             // 400
-api.unauthorised(cb)           // 401 (British spelling, matches the Request API)
-api.forbidden(cb)              // 403
-api.notImplemented(cb)         // 501
-api.internalServerError(cb)    // 500
+api.notFound(cb); // 404
+api.tooManyRequests(cb); // 429
+api.conflict(cb); // 409
+api.badRequest(cb); // 400
+api.unauthorised(cb); // 401 (British spelling, matches the Request API)
+api.forbidden(cb); // 403
+api.notImplemented(cb); // 501
+api.internalServerError(cb); // 500
 ```
 
 These helpers allow you to write:
 
 ```ts
-api.get('/secret')
-   .unauthorised(() => ({ message: 'You need a token' }))
-   .withResult()
-   .json()
-   .then((res) =>
-     Result.match(res, {
-       onOk: (data) => console.log(data),
-       onErr: (err) => {
-         if (err.tag === 'unauthorisedError') {
-           console.warn(err.data.message);
-         }
-       },
-     })
-   );
+api
+  .get('/secret')
+  .unauthorised(() => ({ message: 'You need a token' }))
+  .withResult()
+  .json()
+  .then((res) =>
+    Result.match(res, {
+      onOk: (data) => console.log(data),
+      onErr: (err) => {
+        if (err.tag === 'unauthorisedError') {
+          console.warn(err.data.message);
+        }
+      },
+    }),
+  );
 ```
 
 ---
@@ -294,7 +293,7 @@ api.get('/secret')
 class Request<
   Method extends HttpMethods,
   TRequest extends AspiRequestInitWithBody = AspiRequestInit,
-  Opts extends Record<any, any> = { error: {} }
+  Opts extends Record<any, any> = { error: {} },
 > {
   // core request factories
   get(path: string): Request<'GET', TRequest, Opts>;
@@ -312,16 +311,16 @@ class Request<
   setBearer(token: string): this;
   setRetry(cfg: AspiRetryConfig<TRequest>): this;
   setQueryParams(
-    params:
-      | Record<string, string>
-      | string[][]
-      | string
-      | URLSearchParams
+    params: Record<string, string> | string[][] | string | URLSearchParams,
   ): this;
-  use<T extends TRequest, U extends TRequest>(fn: RequestTransformer<T, U>): Request<U>;
+  use<T extends TRequest, U extends TRequest>(
+    fn: RequestTransformer<T, U>,
+  ): Request<U>;
 
   // schema validation
-  schema<TSchema extends StandardSchemaV1>(schema: TSchema): Request<
+  schema<TSchema extends StandardSchemaV1>(
+    schema: TSchema,
+  ): Request<
     Method,
     TRequest,
     Merge<
@@ -412,13 +411,15 @@ class Request<
         : [
             AspiResultOk<TRequest, T> | null,
             (
-              | AspiError<TRequest>
-              | (Opts extends { error: any }
-                  ? Opts['error'][keyof Opts['error']]
-                  : never)
-              | JSONParseError
-            )
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                  | JSONParseError
+                )
               | null
+            ),
           ]
   >;
   text(): Promise<
@@ -435,12 +436,14 @@ class Request<
         : [
             AspiResultOk<TRequest, string> | null,
             (
-              | AspiError<TRequest>
-              | (Opts extends { error: any }
-                  ? Opts['error'][keyof Opts['error']]
-                  : never)
-            )
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                )
               | null
+            ),
           ]
   >;
   blob(): Promise<
@@ -457,12 +460,14 @@ class Request<
         : [
             AspiResultOk<TRequest, Blob> | null,
             (
-              | AspiError<TRequest>
-              | (Opts extends { error: any }
-                  ? Opts['error'][keyof Opts['error']]
-                  : never)
-            )
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                )
               | null
+            ),
           ]
   >;
 }
