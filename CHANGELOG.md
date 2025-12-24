@@ -1,5 +1,11 @@
 # aspi
 
+## 2.0.1
+
+### Patch Changes
+
+- d2073df: readme format
+
 ## 2.0.0
 
 ### Major Changes
