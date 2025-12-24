@@ -1,5 +1,11 @@
 # aspi
 
+## 2.0.0
+
+### Major Changes
+
+- cc73330: major refactor and updated api interface
+
 ## 1.3.0
 
 ### Minor Changes
