@@ -1,3 +1,4 @@
+
 # Aspi
 
 A tiny, type‑safe wrapper around the native **fetch** API that gives you a clean, monadic interface for HTTP requests.
@@ -15,9 +16,20 @@ It ships with **zero runtime dependencies**, a **tiny bundle size**, and full **
 
 ## Installation
 
-```bash
-npm install aspi
-```
+npm
+    ```bash
+    npm install aspi
+    ```
+
+yarn
+    ```bash
+    yarn add aspi
+    ```
+
+pnpm
+    ```bash
+    pnpm add aspi
+    ```
 
 ---
 
@@ -38,14 +50,15 @@ const api = new Aspi({
 async function getTodo(id: number) {
   const [value, error] = await api
     .get(`/todos/${id}`)
-    .setQueryParams({ include: 'details' })      // optional query string
+    .setQueryParams({ include: 'details' }) // optional query string
     .notFound(() => ({ message: 'Todo not found' }))
     .json<{ id: number; title: string; completed: boolean }>();
 
   if (value) console.log('Todo:', value);
   if (error) {
-    if (error.tag === 'aspxError') console.error(error.response.status);
+    if (error.tag === 'aspiError') console.error(error.response.status);
     if (error.tag === 'notFoundError') console.warn(error.data.message);
+    if (error.tag === 'jsonParseError') console.error(error.data.message);
   }
 }
 
@@ -69,7 +82,7 @@ async function getTodoResult(id: number) {
   Result.match(response, {
     onOk: (data) => console.log('✅', data),
     onErr: (err) => {
-      if (err.tag === 'aspxError') console.error(err.response.status);
+      if (err.tag === 'aspiError') console.error(err.response.status);
       if (err.tag === 'notFoundError') console.warn(err.data.message);
     },
   });
@@ -77,6 +90,64 @@ async function getTodoResult(id: number) {
 ```
 
 ---
+
+## Throwable
+
+The `throwable()` toggle makes a request **throw** on any non‑2xx HTTP response, allowing you to use the familiar `try / catch` pattern instead of dealing with tuples or `Result` objects.
+
+When a request is in *throwable* mode, the body‑parser methods (`json()`, `text()`, `blob()`) resolve with the parsed value directly. If the response status indicates an error, the promise is rejected with a typed Aspi error (e.g., `aspiError`, `unauthorisedError`, `jsonParseError`, …).
+
+#### Basic usage
+
+```ts
+// Using throwable with async/await + try/catch
+try {
+  const todo = await api
+    .get('/todos/1')
+    .throwable()      // <─ enable throwable mode
+    .json<{ id: number; title: string; completed: boolean }>(); // returns the parsed JSON
+
+  console.log('✅ Todo:', todo);
+} catch (err) {
+  // `err` is a typed Aspi error
+  if (err.tag === 'aspiError') {
+    console.error('HTTP error:', err.response.status);
+  } else if (err.tag === 'jsonParseError') {
+    console.error('Invalid JSON:', err.data.message);
+  } else {
+    console.error('Unexpected error:', err);
+  }
+}
+```
+
+#### Interaction with `withResult()`
+
+`throwable()` and `withResult()` are *mutually exclusive* – the last toggle applied wins.
+
+```ts
+// Result mode wins (throwable is ignored)
+const result = await api
+  .post('/login')
+  .withResult()   // enables Result mode
+  .throwable()    // ignored because withResult was called later
+  .json<{ token: string }>();
+
+// Throwable mode wins (Result is ignored)
+const data = await api
+  .get('/profile')
+  .throwable()    // enables throwable mode
+  .withResult()   // ignored because throwable was called later
+  .json();
+```
+
+#### When to use `throwable()`
+
+- You prefer native `try / catch` flow over tuple/result handling.
+- You want the request to **reject** automatically on HTTP errors, keeping the success path clean.
+- You are integrating Aspi into existing codebases that already rely on exception handling.
+
+`throwable()` gives you the flexibility to choose the error‑handling style that best fits your project.
+
 
 ## Schema validation (Zod example)
 
