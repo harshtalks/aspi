@@ -1,10 +1,4 @@
-import {
-  AspiError,
-  CustomError,
-  type AspiRequest,
-  type AspiResponse,
-  type JSONParseError,
-} from './error';
+import { AspiError, CustomError, type JSONParseError } from './error';
 import {
   getHttpErrorStatus,
   httpErrors,
@@ -14,15 +8,17 @@ import {
 } from './http';
 import type {
   AspiPlainResponse,
+  AspiRequest,
   AspiRequestInit,
+  AspiResponse,
   AspiResultOk,
   AspiRetryConfig,
+  BaseURL,
   CustomErrorCb,
   ErrorCallbacks,
   Merge,
-  Middleware,
-  Prettify,
   RequestOptions,
+  RequestTransformer,
 } from './types';
 import * as Result from './result';
 import type { StandardSchemaV1 } from './standard-schema';
@@ -59,7 +55,7 @@ export class Request<
   #localRequestInit: TRequest;
   #customErrorCbs: ErrorCallbacks = {};
   #queryParams?: URLSearchParams;
-  #middlewares: Middleware<TRequest, TRequest>[];
+  #middlewares: RequestTransformer<TRequest, TRequest>[];
   #schema: StandardSchemaV1 | null = null;
   #bodySchema: StandardSchemaV1 | null = null;
   #retryConfig?: AspiRetryConfig<TRequest>;
@@ -70,20 +66,18 @@ export class Request<
   constructor(
     method: HttpMethods,
     path: string,
-    {
-      requestConfig,
-      retryConfig,
-      middlewares,
-      errorCbs,
-      throwOnError,
-    }: RequestOptions<TRequest>,
+    requestOptions: RequestOptions<TRequest>,
   ) {
     this.#path = path;
-    this.#middlewares = middlewares || [];
-    this.#localRequestInit = { ...requestConfig, method: method } as TRequest;
-    this.#retryConfig = retryConfig;
-    this.#customErrorCbs = errorCbs || {};
-    this.#throwOnError = throwOnError || false;
+    this.#middlewares = requestOptions.middlewares || [];
+    this.#localRequestInit = {
+      ...requestOptions.requestConfig,
+      method: method,
+    };
+    this.#retryConfig = requestOptions.retryConfig;
+    this.#customErrorCbs = requestOptions.errorCbs || {};
+    this.#throwOnError = requestOptions.throwOnError || false;
+    this.#shouldBeResult = requestOptions.shouldBeResult || false;
   }
 
   /**
@@ -94,7 +88,7 @@ export class Request<
    * const request = new Request('/users', config);
    * request.setBaseUrl('https://api.example.com');
    */
-  setBaseUrl(url: string) {
+  setBaseUrl(url: BaseURL) {
     this.#localRequestInit.baseUrl = url;
     return this;
   }
@@ -121,18 +115,26 @@ export class Request<
   }
 
   /**
-   * Sets multiple headers for the request.
-   * @param headers An object containing header key-value pairs
-   * @returns The request instance for chaining
+   * Merges the provided headers into the request configuration.
+   *
+   * @param {HeadersInit} headers - An object or iterable containing header name/value pairs.
+   *   Existing headers are retained unless a key in this object overwrites them.
+   * @returns {this} The current {@link Request} instance for method chaining.
+   *
    * @example
+   * // Set common JSON headers
    * const request = new Request('/users', config);
    * request.setHeaders({
    *   'Content-Type': 'application/json',
-   *   'Accept': 'application/json'
+   *   'Accept': 'application/json',
    * });
    */
-  setHeaders(headers: Record<string, string>) {
-    this.#localRequestInit.headers = headers;
+  setHeaders(headers: HeadersInit) {
+    // Merge the new headers with any existing ones, allowing the new values to overwrite duplicates.
+    this.#localRequestInit.headers = {
+      ...(this.#localRequestInit.headers ?? {}),
+      ...headers,
+    };
     return this;
   }
 
@@ -147,7 +149,7 @@ export class Request<
    */
   setHeader(key: string, value: string) {
     this.#localRequestInit.headers = {
-      ...this.#localRequestInit.headers,
+      ...(this.#localRequestInit.headers ?? {}),
       [key]: value,
     };
     return this;
@@ -392,31 +394,55 @@ export class Request<
   internalServerError<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
     return this.error('internalServerError', 'INTERNAL_SERVER_ERROR', cb);
   }
-
   /**
-   * Sets a custom error handler for a specific HTTP status code.
-   * @param tag A string identifier for the error type
-   * @param status The HTTP error status to handle
-   * @param cb The callback function to handle the error
-   * @returns The request instance for chaining
-   * @example
-   * const request = new Request('/users', config);
-   * request
-      .withResult()
-      .error('customError', 'BAD_REQUEST', (error) => {
-   *   console.log('Bad request error:', error);
-   *   return {
-   *     message: 'Invalid input',
-   *     details: error.response.responseData
-   *   };
-   * });
+   * Register a custom error handler for a specific HTTP status code.
    *
-   * // Later when making the request:
+   * When the response matches the provided `status`, the supplied callback `cb`
+   * is invoked and its return value is wrapped in a {@link CustomError} with the
+   * given `tag`. The method also augments the request's generic `Opts['error']`
+   * type so that the custom error is reflected in the resulting `Result`
+   * union.
+   *
+   * @template Tag - A string literal used as the error tag.
+   * @template A   - The shape of the data returned by the callback.
+   *
+   * @param {Tag} tag
+   *   A unique identifier for the custom error. This value becomes the `tag`
+   *   property of the {@link CustomError} produced by the handler.
+   *
+   * @param {HttpErrorStatus} status
+   *   The HTTP status code (e.g. `'BAD_REQUEST'`, `'NOT_FOUND'`) that should
+   *   trigger the custom handler.
+   *
+   * @param {CustomErrorCb<TRequest, A>} cb
+   *   A callback that receives the failing request and response objects and
+   *   returns an object describing the error payload.
+   *
+   * @returns {Request<Method, TRequest, Merge<Omit<Opts, 'error'>, { error: { [K in Tag | keyof Opts['error']]: K extends Tag ? CustomError<Tag, A> : Opts['error'][K]; } }>>}
+   *   The same {@link Request} instance, now typed with the newly added error
+   *   variant, allowing method‑chaining.
+   *
+   * @example
+   * ```ts
+   * const request = new Request('/users', config);
+   *
+   * // Attach a custom handler for a 400 Bad Request response
+   * request
+   *  withResult()
+   *   .error('customError', 'BAD_REQUEST', (ctx) => {
+   *     console.log('Bad request error:', ctx);
+   *     return {
+   *       message: 'Invalid input',
+   *       details: ctx.response.responseData,
+   *     };
+   *   });
+   *
+   * // Later, when executing the request:
    * const result = await request.json();
-   * if (Result.isErr(result)) {
-   *   if(result.tag === 'customError') {
+   * if (Result.isErr(result) && result.tag === 'customError') {
    *   console.log(result.error.data.message); // 'Invalid input'
    * }
+   * ```
    */
   error<Tag extends string, A extends {}>(
     tag: Tag,
@@ -445,16 +471,37 @@ export class Request<
   }
 
   /**
-   * Sets query parameters for the request URL.
-   * @param params An object containing query parameter key-value pairs
-   * @returns The request instance for chaining
+   * Sets the query parameters for the request URL.
+   *
+   * Accepts any value that can be passed to the `URLSearchParams` constructor:
+   * - an object mapping keys to string values,
+   * - an iterable of `[key, value]` tuples,
+   * - a raw query string, or
+   * - an existing {@link URLSearchParams} instance.
+   *
+   * The supplied parameters replace any previously defined query parameters.
+   *
+   * @template T - The concrete type of the supplied parameters.
+   * @param {T} params - The query parameters to apply.
+   * @returns {this} The request instance for method‑chaining.
+   *
    * @example
    * const request = new Request('/users', config);
    * request.setQueryParams({
    *   page: '1',
    *   limit: '10',
-   *   sort: 'desc'
+   *   sort: 'desc',
    * });
+   *
+   * // Using a raw query string
+   * request.setQueryParams('page=1&limit=10');
+   *
+   * // Using an array of entries
+   * request.setQueryParams([['page', '1'], ['limit', '10']]);
+   *
+   * // Using an existing URLSearchParams instance
+   * const qp = new URLSearchParams({ page: '1' });
+   * request.setQueryParams(qp);
    */
   setQueryParams<
     T extends Record<string, string> | string[][] | string | URLSearchParams,
@@ -474,27 +521,37 @@ export class Request<
   }
 
   /**
-   * Sets the output schema for validating the response data using Zod.
-   * @param schema The Zod schema to validate the response
-   * @returns The request instance for chaining
+   * Sets a validation schema for the response data.
+   *
+   * The provided {@link StandardSchemaV1} schema will be used to validate the
+   * response payload when the request is executed. If validation fails, a
+   * `parseError` is added to the request's error type.
+   *
+   * @template TSchema - A type extending {@link StandardSchemaV1}
+   * @param schema - The schema used to validate the response data
+   * @returns The request instance for chaining with an updated generic type that
+   * includes the schema and a possible `parseError` in the error union
+   *
    * @example
+   * ```ts
    * import { z } from 'zod';
    *
    * const userSchema = z.object({
    *   id: z.number(),
    *   name: z.string(),
-   *   email: z.string().email()
+   *   email: z.string().email(),
    * });
    *
    * const request = new Request('/users', config);
    * const result = await request
    *   .withResult()
-   *   .output(userSchema)
+   *   .schema(userSchema)
    *   .json();
    *
    * if (Result.isOk(result)) {
    *   const user = result.value; // Typed and validated user data
    * }
+   * ```
    */
   schema<TSchema extends StandardSchemaV1>(schema: TSchema) {
     this.#schema = schema;
@@ -521,15 +578,32 @@ export class Request<
   }
 
   /**
-   * Sets the request to throw an error if the response status is not successful.
-   * @returns The request instance for chaining
-   * @example
-   * const request = new Request('/users', config);
-   * const result = await request
-   *   .withResult()
-   *   .throwable()
-   *   .json();
+   * Configures the request to **throw** an exception when the response status
+   * indicates a failure (i.e., `!response.ok`). This disables the “Result”
+   * mode (`withResult`) and enables “throwable” mode, causing
+   * `await request.json()` (or other response helpers) to either resolve with
+   * the successful payload **or** reject with an `AspiError`/`CustomError`.
    *
+   * Use this when you prefer traditional `try / catch` error handling over
+   * the explicit `Result` type returned by {@link withResult}.
+   *
+   * @returns This {@link Request} instance, now typed with `throwable: true` and
+   *          `withResult: false` for proper chaining.
+   *
+   * @example
+   * ```ts
+   * const request = new Request('/users', config);
+   *
+   * try {
+   *   const user = await request
+   *     .throwable()   // Enable throwing on HTTP errors
+   *     .json<User>(); // Will throw if the response is not ok
+   *   console.log(user);
+   * } catch (err) {
+   *   // err is either AspiError or a CustomError returned by a custom handler
+   *   console.error('Request failed:', err);
+   * }
+   * ```
    */
   throwable() {
     this.#shouldBeResult = false;
@@ -550,21 +624,45 @@ export class Request<
   }
 
   /**
-   * Executes the request and returns the JSON response.
-   * @returns A Promise containing the Result type with either successful data or error information
+   * Sends the request and parses the response body as JSON.
+   *
+   * The resolved value of the returned promise varies based on the request mode:
+   *
+   * - **Result mode** (`withResult()`): resolves to a {@link Result.Result} that
+   *   contains either an {@link AspiResultOk} with the parsed payload or a union
+   *   of possible error types (HTTP errors, custom errors, JSON‑parse errors,
+   *   schema‑validation errors, etc.).
+   *
+   * - **Throwable mode** (`throwable()`): resolves directly to the successful
+   *   payload (`AspiPlainResponse`) and throws a {@link AspiError} or
+   *   {@link CustomError} on failure.
+   *
+   * - **Default mode** (no explicit mode): resolves to a tuple
+   *   `[value, error]` where exactly one element is non‑null.
+   *
+   * @template T - The inferred output type of the response schema (if a schema
+   *   was supplied via {@link schema}). When no schema is provided `T` defaults
+   *   to `any`.
+   *
+   * @returns A promise whose shape depends on the selected mode (see description).
+   *   In Result mode it is `Result<ResultOk<…>, …>`, in throwable mode it is
+   *   `AspiPlainResponse<…>`, and otherwise a tuple
+   *   `[AspiResultOk<…> | null, Error | null]`.
+   *
    * @example
+   * // Using the Result API
    * const request = new Request('/users', config);
    * const result = await request
    *   .setQueryParams({ id: '123' })
-   *   .
-   withResult()
-   *   .notFound((error) => ({ message: 'User not found' }))
+   *   .withResult()
+   *   .notFound(() => ({ message: 'User not found' }))
    *   .json<User>();
    *
    * if (Result.isOk(result)) {
-   *   const user = result.value; // User data
+   *   // `result.value` has type `User`
+   *   console.log(result.value);
    * } else {
-   *   console.error(result.error); // Error handling
+   *   console.error(result.error);
    * }
    */
   async json<T extends StandardSchemaV1.InferOutput<Opts['schema']>>(): Promise<
@@ -593,30 +691,69 @@ export class Request<
             ),
           ]
   > {
-    const output = await this.#makeRequest(
-      async (response) =>
-        response.json().catch(
-          (e) =>
-            new CustomError('jsonParseError', {
-              message: e instanceof Error ? e.message : 'Failed to parse JSON',
-            }),
-        ),
-      true,
-    );
+    const output = await this.#makeRequest(async (response) => {
+      // Treat 204 No Content and any 3xx response as having no JSON payload.
+      if (
+        response.status === 204 ||
+        (response.status >= 300 && response.status < 400)
+      ) {
+        // Return null (or undefined) to indicate absence of body.
+        // The surrounding type handling will accommodate the null value.
+        return null;
+      }
+      // Normal JSON parsing with error handling.
+      return response.json().catch(
+        (e) =>
+          new CustomError('jsonParseError', {
+            message: e instanceof Error ? e.message : 'Failed to parse JSON',
+          }),
+      );
+    }, true);
 
     // @ts-ignore
     return this.#mapResponse(output);
   }
 
   /**
-   * Executes the request and returns the response as plain text.
-   * @returns A Promise containing the Result type with either successful text data or error information
+   * Executes the request and returns the response body as plain text.
+   *
+   * The method respects the request mode:
+   *
+   * - **Result mode** (`withResult()`): resolves to a {@link Result.Result}
+   *   containing either an {@link AspiResultOk} with the text payload or an
+   *   error variant.
+   * - **Throwable mode** (`throwable()`): resolves directly to the text string
+   *   and throws on error.
+   * - **Default mode**: resolves to a tuple `[value, error]` where exactly one
+   *   element is `null`.
+   *
+   * @returns {Promise<
+   *   Opts['withResult'] extends true
+   *     ? Result.Result<
+   *         AspiResultOk<TRequest, string>,
+   *         AspiError<TRequest> |
+   *         (Opts extends { error: any } ? Opts['error'][keyof Opts['error']] : never)
+   *       >
+   *     : Opts['throwable'] extends true
+   *       ? AspiPlainResponse<TRequest, string>
+   *       : [
+   *           AspiResultOk<TRequest, string> | null,
+   *           (
+   *             | AspiError<TRequest>
+   *             | (Opts extends { error: any } ? Opts['error'][keyof Opts['error']] : never)
+   *             | null
+   *           )
+   *         ]
+   * }>
+   *   A promise that resolves according to the selected request mode.
+   *
    * @example
+   * ```ts
    * const request = new Request('/data.txt', config);
    * const result = await request
    *   .setQueryParams({ version: '1' })
    *   .withResult()
-   *   .notFound((error) => ({ message: 'Text file not found' }))
+   *   .notFound(() => ({ message: 'Text file not found' }))
    *   .text();
    *
    * if (Result.isOk(result)) {
@@ -624,6 +761,7 @@ export class Request<
    * } else {
    *   console.error(result.error); // Error handling
    * }
+   * ```
    */
   async text(): Promise<
     Opts['withResult'] extends true
@@ -649,22 +787,57 @@ export class Request<
             ),
           ]
   > {
-    const output = await this.#makeRequest<string>((response) =>
-      response.text(),
-    );
+    const output = await this.#makeRequest<string>((response) => {
+      return response.text();
+    });
     // @ts-ignore
     return this.#mapResponse(output);
   }
 
   /**
-   * Executes the request and returns the response as a Blob.
-   * @returns A Promise containing the Result type with either successful Blob data or error information
+   * Executes the request and returns the response body as a {@link Blob}.
+   *
+   * The shape of the returned {@link Promise} depends on the request mode:
+   *
+   * - **Result mode** (`withResult()`): resolves to a {@link Result.Result} containing
+   *   either an {@link AspiResultOk} with `Blob` data or an error variant.
+   * - **Throwable mode** (`throwable()`): resolves directly to a {@link Blob}
+   *   (wrapped in {@link AspiPlainResponse}) and throws on failure.
+   * - **Default mode**: resolves to a tuple `[value, error]` where exactly one element
+   *   is `null`.
+   *
+   * @returns {Promise<
+   *   Opts['withResult'] extends true
+   *     ? Result.Result<
+   *         AspiResultOk<TRequest, Blob>,
+   *         | AspiError<TRequest>
+   *         | (Opts extends { error: any }
+   *             ? Opts['error'][keyof Opts['error']]
+   *             : never)
+   *       >
+   *     : Opts['throwable'] extends true
+   *       ? AspiPlainResponse<TRequest, Blob>
+   *       : [
+   *           AspiResultOk<TRequest, Blob> | null,
+   *           (
+   *             | (
+   *                 | AspiError<TRequest>
+   *                 | (Opts extends { error: any }
+   *                     ? Opts['error'][keyof Opts['error']]
+   *                     : never)
+   *               )
+   *             | null
+   *           ),
+   *         ]
+   * }>
+   *
    * @example
+   * ```ts
    * const request = new Request('/image.jpg', config);
    * const result = await request
    *   .setQueryParams({ size: 'large' })
    *   .withResult()
-   *   .notFound((error) => ({ message: 'Image not found' }))
+   *   .notFound(() => ({ message: 'Image not found' }))
    *   .blob();
    *
    * if (Result.isOk(result)) {
@@ -672,6 +845,7 @@ export class Request<
    * } else {
    *   console.error(result.error); // Error handling
    * }
+   * ```
    */
   async blob(): Promise<
     Opts['withResult'] extends true
@@ -703,8 +877,13 @@ export class Request<
   }
 
   #url() {
+    const passedBaseUrl =
+      typeof this.#localRequestInit.baseUrl === 'string'
+        ? this.#localRequestInit.baseUrl
+        : this.#localRequestInit.baseUrl.toString();
+
     // Normalize base URL by removing trailing slashes
-    const baseUrl = this.#localRequestInit.baseUrl?.replace(/\/+$/, '') ?? '';
+    const baseUrl = passedBaseUrl.replace(/\/+$/, '') ?? '';
 
     // Ensure path starts with exactly one forward slash
     const path = this.#path.replace(/^\/+/, '/');
@@ -720,31 +899,63 @@ export class Request<
   }
 
   /**
-   * Returns the complete URL for the request including base URL, path, and query parameters.
-   * @returns The complete URL string
+   * Returns the fully‑qualified URL that will be used for the request.
+   *
+   * The URL is constructed from the configured base URL, the request path,
+   * and any query parameters added via {@link setQueryParams}.
+   *
+   * @returns {string} The complete request URL.
+   *
    * @example
+   * ```ts
    * const request = new Request('/users', config);
    * request.setBaseUrl('https://api.example.com');
    * request.setQueryParams({ id: '123' });
-   * console.log(request.url()); // 'https://api.example.com/users?id=123'
+   *
+   * console.log(request.url());
+   * // => 'https://api.example.com/users?id=123'
+   * ```
    */
   url() {
     return this.#url();
   }
 
   /**
-   * Configures the request to return a Result type instead of a tuple.
-   * @returns The request instance for chaining with Result type return value
+   * Switches the request into **Result** mode.
+   *
+   * In Result mode the response helpers (`json`, `text`, `blob`, …) resolve to a
+   * {@link Result.Result} instance instead of the default tuple
+   * `[value, error]`. This allows callers to use pattern matching
+   * (`Result.isOk`, `Result.isErr`) to handle success and failure.
+   *
+   * Calling `withResult` disables the “throwable” behaviour (see {@link throwable}).
+   *
+   * @returns {Request<
+   *   Method,
+   *   TRequest,
+   *   Merge<
+   *     Omit<Opts, 'withResult' | 'throwable'>,
+   *     {
+   *       withResult: true;
+   *       throwable: false;
+   *     }
+   *   >
+   * >} The same {@link Request} instance, now typed with `withResult: true` and
+   * `throwable: false` for fluent chaining.
+   *
    * @example
+   * ```ts
    * const request = new Request('/users', config);
+   *
    * const result = await request
-   *   .withResult()
+   *   .withResult() // enable Result mode
    *   .json<User>();
    *
-   * // Returns Result type instead of tuple
    * if (Result.isOk(result)) {
-   *   const user = result.value;
+   *   // `result.value` is of type `User`
+   *   console.log(result.value);
    * }
+   * ```
    */
   withResult() {
     this.#throwOnError = false;
@@ -777,6 +988,10 @@ export class Request<
     } else {
       return [null, Result.getErrorOrNull(value)];
     }
+  }
+
+  #isSuccessResponse(response: Response) {
+    return response.ok || (response.status >= 300 && response.status < 400);
   }
 
   async #makeRequest<T>(
@@ -812,8 +1027,12 @@ export class Request<
       const url = this.#url();
 
       let attempts = 1;
-      let response;
-      let responseData;
+      let response: Response = new Response(null, {
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+
+      let responseData = null;
 
       while (attempts <= retries) {
         try {
@@ -821,8 +1040,8 @@ export class Request<
 
           responseData = await responseParser(response);
 
-          if (responseData instanceof CustomError) {
-            // we can break out of loop now with the error -> ex. JSON Parsing Error
+          if (responseData instanceof Error) {
+            // we can break out of loop now with the error → e.g. JSON Parsing Error
             // @ts-ignore
             return Result.err(responseData);
           }
@@ -836,7 +1055,7 @@ export class Request<
             : false;
 
           if (
-            response.ok ||
+            this.#isSuccessResponse(response) ||
             (!retryOn.includes(response.status as HttpErrorCodes) &&
               !retryWhileCondition)
           ) {
@@ -862,7 +1081,7 @@ export class Request<
           }
 
           if (attempts < retries) {
-            // Delaying the next retry
+            // Delaying the next retry (abort‑aware)
             const delay =
               typeof retryDelay === 'function'
                 ? await retryDelay(
@@ -873,46 +1092,73 @@ export class Request<
                   )
                 : retryDelay;
 
-            // delaying retry
-            await new Promise((resolve) => setTimeout(resolve, delay));
+            await this.#abortDelay(delay, request);
           }
         } catch (e) {
+          // Abort handling – stop all further retries and fail immediately
+          if (e instanceof Error && e.name === 'AbortError') {
+            // If a custom 500 handler exists, honor it
+            if (500 in this.#customErrorCbs) {
+              const result = this.#customErrorCbs[response.status].cb({
+                request,
+                response: this.#makeResponse(response, responseData),
+              });
+
+              // @ts-ignore
+              return Result.err(
+                new CustomError(
+                  // @ts-ignore
+                  this.#customErrorCbs[response.status].tag,
+                  result,
+                ),
+              );
+            }
+
+            return Result.err(
+              new AspiError(
+                e.message,
+                this.#request(),
+                this.#makeResponse(response, responseData),
+              ),
+            );
+          }
+
           // max retry
           if (attempts === retries) throw e;
 
-          // delay for retry
+          // delay for retry (abort‑aware)
           const delay =
             typeof retryDelay === 'function'
               ? await retryDelay(
                   retries - attempts - 1,
                   retries,
                   request,
-                  this.#makeResponse(response!, responseData),
+                  this.#makeResponse(response, responseData),
                 )
               : retryDelay;
 
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          await this.#abortDelay(delay, request);
         }
 
-        // next retry
+        // next retry callback
         if (onRetry) {
-          onRetry(request, this.#makeResponse(response!, responseData));
+          onRetry(request, this.#makeResponse(response, responseData));
         }
         attempts++;
       }
 
-      if (!response!.ok) {
-        if (response!.status in this.#customErrorCbs) {
-          const result = this.#customErrorCbs[response!.status].cb({
+      if (!this.#isSuccessResponse(response)) {
+        if (response.status in this.#customErrorCbs) {
+          const result = this.#customErrorCbs[response.status].cb({
             request,
-            response: this.#makeResponse(response!, responseData),
+            response: this.#makeResponse(response, responseData),
           });
 
           // @ts-ignore
           return Result.err(
             new CustomError(
               // @ts-ignore
-              this.#customErrorCbs[response!.status].tag,
+              this.#customErrorCbs[response.status].tag,
               result,
             ),
           );
@@ -920,9 +1166,9 @@ export class Request<
 
         return Result.err(
           new AspiError(
-            response!.statusText,
+            response.statusText,
             this.#request(),
-            this.#makeResponse(response!, responseData),
+            this.#makeResponse(response, responseData),
           ),
         );
       }
@@ -941,14 +1187,14 @@ export class Request<
         return Result.ok({
           data: data.value as T,
           request,
-          response: this.#makeResponse(response!, responseData),
+          response: this.#makeResponse(response, responseData),
         });
       }
 
       return Result.ok({
         data: responseData as T,
         request,
-        response: this.#makeResponse(response!, responseData),
+        response: this.#makeResponse(response, responseData),
       });
     } catch (error) {
       if (500 in this.#customErrorCbs) {
@@ -977,23 +1223,45 @@ export class Request<
           {
             status: 500,
             statusText: 'INTERNAL_SERVER_ERROR',
-          },
+          } as AspiResponse<any, true>,
         ),
       );
     }
   }
 
+  #abortDelay(ms: number, request: AspiRequest<TRequest>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, ms);
+      const signal = request.requestInit.signal;
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(timer);
+          reject(new DOMException('The user aborted a request.', 'AbortError'));
+        } else {
+          const abortHandler = () => {
+            clearTimeout(timer);
+            reject(
+              new DOMException('The user aborted a request.', 'AbortError'),
+            );
+          };
+          signal.addEventListener('abort', abortHandler, { once: true });
+        }
+      }
+    });
+  }
+
   #request(): AspiRequest<TRequest> {
     let requestInit = this.#localRequestInit;
     for (const middleware of this.#middlewares) {
-      requestInit = middleware(this.#localRequestInit);
+      requestInit = middleware(requestInit);
     }
     return {
-      requestInit: requestInit as unknown as TRequest,
-      baseUrl: this.#localRequestInit.baseUrl,
+      requestInit: {
+        ...requestInit,
+        retryConfig: this.#sanitisedRetryConfig(),
+      } as TRequest,
       path: this.#path,
       queryParams: this.#queryParams || null,
-      retryConfig: this.#sanitisedRetryConfig(),
     };
   }
 
@@ -1020,5 +1288,75 @@ export class Request<
       statusText: getHttpErrorStatus(response.status as HttpErrorCodes),
       responseData,
     };
+  }
+
+  /**
+   * Returns the underlying {@link AspiRequest} object that will be used for the fetch call.
+   *
+   * This method does not perform any network activity; it simply builds and returns the
+   * request configuration, including any applied middlewares, query parameters, etc.
+   *
+   * @returns {AspiRequest<TRequest>} The constructed request object.
+   */
+  getRequest(): AspiRequest<TRequest> {
+    return this.#request();
+  }
+
+  /**
+   * Retrieves the registry of custom error callbacks that have been
+   * registered via {@link error}. The returned object maps HTTP status
+   * codes to their corresponding callback functions and tags.
+   *
+   * @returns {ErrorCallbacks} A shallow copy of the internal error callback registry.
+   */
+  public getErrorCallbackRegistry(): ErrorCallbacks {
+    // Return a shallow copy to prevent external mutation of the private registry.
+    return { ...this.#customErrorCbs };
+  }
+  /**
+   * Returns whether the request is configured to return a {@link Result.Result}
+   * instead of the default tuple or throwing.
+   *
+   * @returns {boolean} `true` when {@link withResult} has been called.
+   */
+  isResult(): boolean {
+    return this.#shouldBeResult;
+  }
+
+  /**
+   * Returns whether the request is configured to throw on HTTP errors.
+   *
+   * @returns {boolean} `true` when {@link throwable} has been called.
+   */
+  isThrowable(): boolean {
+    return this.#throwOnError;
+  }
+
+  /**
+   * Returns the effective retry configuration for this request, including defaulted values.
+   *
+   * The returned object contains:
+   * - `retries` – number of retry attempts (default 1)
+   * - `retryDelay` – delay between attempts in milliseconds or a function that returns a delay
+   * - `retryOn` – array of HTTP status codes that should trigger a retry
+   * - `retryWhile` – optional custom predicate executed after each response
+   * - `onRetry` – optional callback invoked after a retry attempt
+   *
+   * A shallow copy is returned to avoid accidental mutation of the internal state.
+   *
+   * @returns {{
+   *   retries: number;
+   *   retryDelay: number | ((attempt: number, maxAttempts: number, request: AspiRequest<TRequest>, response: AspiResponse<any, true>) => number);
+   *   retryOn: number[];
+   *   retryWhile?: (request: AspiRequest<TRequest>, response: AspiResponse<any, true>) => boolean | Promise<boolean>;
+   *   onRetry?: (request: AspiRequest<TRequest>, response: AspiResponse<any, true>) => void;
+   * }}
+   */
+  getRetryConfig() {
+    // Use the internal sanitisation logic to ensure defaults are applied.
+    // @ts-ignore
+    const cfg = this.#sanitisedRetryConfig();
+    // Return a shallow copy so callers cannot mutate private state.
+    return { ...cfg };
   }
 }

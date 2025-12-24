@@ -1,109 +1,167 @@
-# aspi
 
-I made this project because I am not happy with any of the Rest API clients available in eco system. Sure, Axios is great but it feels so bloated and I am never going to use interceptors or any of the other features it provides. I just want to make a simple request and get the response. That's it. So, I made this project. It is a simple Rest API client that is built on top of native fetch API. It is very simple to use and has a very small bundle size. It is perfect for small projects where you don't want to bloat your project with unnecessary features.
+# Aspi
 
-## Why Aspi?
+A tiny, type‑safe wrapper around the native **fetch** API that gives you a clean, monadic interface for HTTP requests.
+It ships with **zero runtime dependencies**, a **tiny bundle size**, and full **TypeScript** support out of the box.
 
-- 🔷 End to end TypeScript support
-- 📦 Very small bundle size
-- 🚀 Built on top of native fetch API
-- 📦 No dependencies
-- ⛓️ Chain of responsibility pattern
-- 🧮 Monadic API
-- ⚠️ Errors as values with Result type
-- 🔍 Errors comes with support for pattern matching
-- 🔄 Retry support
-- 📜 Schema validation support - Zod, Arktype etc.
+> **Why use Aspi?**
+> • End‑to‑end TypeScript typings (request + response)
+> • No extra weight – only a thin wrapper around `fetch`
+> • Chain‑of‑responsibility middleware support via `use`
+> • Result‑based error handling (values as errors)
+> • Built‑in retry, header helpers, query‑string handling, and schema validation (Zod, Arktype, Valibot)
+> • Flexible error mapping with `error` and convenience shortcuts
 
-## Example
+---
 
-```typescript
-import { aspi, Result } from 'aspi';
+## Installation
 
-const apiClient = new Aspi({
+npm
+    ```bash
+    npm install aspi
+    ```
+
+yarn
+    ```bash
+    yarn add aspi
+    ```
+
+pnpm
+    ```bash
+    pnpm add aspi
+    ```
+
+---
+
+## Quick start
+
+```ts
+import { Aspi, Result } from 'aspi';
+
+// Create a client with a base URL and default headers
+const api = new Aspi({
   baseUrl: 'https://api.example.com',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-const getTodos = async (id: number) => {
-  const [value, error] = await apiClient
+// Simple GET request – returns a tuple [value, error]
+async function getTodo(id: number) {
+  const [value, error] = await api
     .get(`/todos/${id}`)
-    .notFound(() => ({
-      message: 'Todo not found',
-    }))
-    .json<{
-      id: number;
-      title: string;
-      completed: boolean;
-    }>();
+    .setQueryParams({ include: 'details' }) // optional query string
+    .notFound(() => ({ message: 'Todo not found' }))
+    .json<{ id: number; title: string; completed: boolean }>();
 
-  if (value) {
-    console.log(value);
-  }
-
+  if (value) console.log('Todo:', value);
   if (error) {
-    if (error.tag === 'aspiError') {
-      console.error(error.response.status);
-    } else if (error.tag === 'notFoundError') {
-      console.log(error.data.message);
-    }
+    if (error.tag === 'aspiError') console.error(error.response.status);
+    if (error.tag === 'notFoundError') console.warn(error.data.message);
+    if (error.tag === 'jsonParseError') console.error(error.data.message);
   }
-};
+}
 
-getTodos(1);
+getTodo(1);
 ```
 
-## With Result type
+---
 
-```typescript
-const getTodos = async (id: number) => {
-  const [value, error] = await apiClient
+## Using the `Result` monad
+
+If you prefer a single `Result` value instead of a tuple, call **`.withResult()`** before a body‑parser method.
+
+```ts
+async function getTodoResult(id: number) {
+  const response = await api
     .get(`/todos/${id}`)
-    .notFound(() => ({
-      message: 'Todo not found',
-    }))
-    .withResult()
-    .json<{
-      id: number;
-      title: string;
-      completed: boolean;
-    }>();
+    .notFound(() => ({ message: 'Todo not found' }))
+    .withResult()                                 // enable Result mode
+    .json<{ id: number; title: string; completed: boolean }>();
 
   Result.match(response, {
-    onOk: (data) => {
-      console.log(data);
-    },
-    onErr: (error) => {
-      if (error.tag === 'aspiError') {
-        console.error(error.response.status);
-      } else if (error.tag === 'notFoundError') {
-        console.log(error.data.message);
-      }
+    onOk: (data) => console.log('✅', data),
+    onErr: (err) => {
+      if (err.tag === 'aspiError') console.error(err.response.status);
+      if (err.tag === 'notFoundError') console.warn(err.data.message);
     },
   });
-
-  getTodos(1);
-};
+}
 ```
 
-## Example with Schema Validation (with Zod)
+---
 
-```typescript
-import { aspi, Result } from 'aspi';
-import { z, ZodError } from 'zod';
+## Throwable
 
-// JSON Placeholder API Client
-const apiClient = new Aspi({
+The `throwable()` toggle makes a request **throw** on any non‑2xx HTTP response, allowing you to use the familiar `try / catch` pattern instead of dealing with tuples or `Result` objects.
+
+When a request is in *throwable* mode, the body‑parser methods (`json()`, `text()`, `blob()`) resolve with the parsed value directly. If the response status indicates an error, the promise is rejected with a typed Aspi error (e.g., `aspiError`, `unauthorisedError`, `jsonParseError`, …).
+
+#### Basic usage
+
+```ts
+// Using throwable with async/await + try/catch
+try {
+  const todo = await api
+    .get('/todos/1')
+    .throwable()      // <─ enable throwable mode
+    .json<{ id: number; title: string; completed: boolean }>(); // returns the parsed JSON
+
+  console.log('✅ Todo:', todo);
+} catch (err) {
+  // `err` is a typed Aspi error
+  if (err.tag === 'aspiError') {
+    console.error('HTTP error:', err.response.status);
+  } else if (err.tag === 'jsonParseError') {
+    console.error('Invalid JSON:', err.data.message);
+  } else {
+    console.error('Unexpected error:', err);
+  }
+}
+```
+
+#### Interaction with `withResult()`
+
+`throwable()` and `withResult()` are *mutually exclusive* – the last toggle applied wins.
+
+```ts
+// Result mode wins (throwable is ignored)
+const result = await api
+  .post('/login')
+  .withResult()   // enables Result mode
+  .throwable()    // ignored because withResult was called later
+  .json<{ token: string }>();
+
+// Throwable mode wins (Result is ignored)
+const data = await api
+  .get('/profile')
+  .throwable()    // enables throwable mode
+  .withResult()   // ignored because throwable was called later
+  .json();
+```
+
+#### When to use `throwable()`
+
+- You prefer native `try / catch` flow over tuple/result handling.
+- You want the request to **reject** automatically on HTTP errors, keeping the success path clean.
+- You are integrating Aspi into existing codebases that already rely on exception handling.
+
+`throwable()` gives you the flexibility to choose the error‑handling style that best fits your project.
+
+
+## Schema validation (Zod example)
+
+```ts
+import { z } from 'zod';
+import { Aspi, Result } from 'aspi';
+
+const api = new Aspi({
   baseUrl: 'https://jsonplaceholder.typicode.com',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-const getTodo = async (id: number) => {
-  const response = await apiClient
+async function getValidatedTodo(id: number) {
+  const response = await api
     .get(`/todos/${id}`)
     .withResult()
     .schema(
@@ -111,177 +169,307 @@ const getTodo = async (id: number) => {
         id: z.number(),
         title: z.string(),
         completed: z.boolean(),
-      }),
+      })
     )
-    .json();
+    .json(); // type inferred from the schema
 
   Result.match(response, {
-    onOk: (data) => {
-      console.log(data);
-    },
+    onOk: (data) => console.log('Todo ✅', data),
     onErr: (err) => {
       if (err.tag === 'parseError') {
-        const error = err.data as ZodError;
-        console.error(error.errors);
+        const parseErr = err.data as z.ZodError;
+        console.error('Validation failed:', parseErr.errors);
       } else {
-        // do something else
+        console.error('Other error', err);
       }
     },
   });
-};
+}
 ```
 
-## Example with retry
+---
 
-```typescript
-import { aspi, Result } from 'aspi';
+## Retry & back‑off
 
-const apiClient = new Aspi({
+```ts
+const api = new Aspi({
   baseUrl: 'https://example.com',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 }).setRetry({
   retries: 3,
-  retryDelay: 1000,
-  // retry on 404 error
-  retryOn: [404],
+  retryDelay: 1000,               // simple fixed delay
+  retryOn: [404, 500],            // retry on specific status codes
 });
 
-// the given GET endpoint does not exist
-apiClient
+// Override retry options for a single request
+api
   .get('/todos/1')
-  .setHeader('Content-Type', 'application/json')
-  // Updating retry options for this request
+  .setHeader('Accept', 'application/json')
   .setRetry({
-    // Exponential backoff
-    retryDelay: (attempts) => Math.pow(2, attempts) * 1000,
+    // exponential back‑off for this call only
+    retryDelay: (attempt) => Math.pow(2, attempt) * 1000,
   })
   .withResult()
   .json()
-  .then((response) => {
-    Result.match(response, {
-      onOk: (data) => {
-        console.log(data);
-      },
-      onErr: (error) => {
-        if (error.tag === 'aspiError') {
-          console.error(error.response);
-        } else if (error.tag === 'notFoundError') {
-          console.log(error.data.message);
-        }
-      },
-    });
-  });
+  .then((res) =>
+    Result.match(res, {
+      onOk: (data) => console.log('Got data', data),
+      onErr: (err) => console.error('Failed', err),
+    })
+  );
 ```
 
-### Installation
+---
 
-```bash
-npm install aspi
+## Global configuration helpers
+
+| Method | Description |
+| ------ | ----------- |
+| `setBaseUrl(url)` | Change the base URL for all subsequent requests. |
+| `setHeaders(headers)` | Merge an object of headers with any existing ones. |
+| `setHeader(key, value)` | Set a single header. |
+| `setBearer(token)` | Shortcut for `Authorization: Bearer <token>`. |
+| `setRetry(retryConfig)` | Define a global retry strategy (overridable per request). |
+| `setQueryParams(params)` | Replace the request’s query string – accepts object, `URLSearchParams`, array of tuples, or raw string. |
+| `schema(schema)` | Attach a `StandardSchemaV1` validator for the response body. |
+| `use(fn)` | Register a request‑transformer middleware that receives the current `RequestInit` and returns a new one. Returns a new `Aspi` instance typed with the transformed config. |
+| `withResult()` | Switch the request into Result mode (returns a `Result` instead of a tuple). |
+| `throwable()` | Make the request throw on non‑2xx responses (useful for `try / catch` patterns). |
+| `url()` | Get the fully‑qualified URL that will be used for the request. |
+
+---
+
+## Custom error handling
+
+Aspi lets you map **any HTTP status** to a typed error object that can be pattern‑matched later.
+
+```ts
+api
+  .error('badRequestError', 'BAD_REQUEST', (req, res) => ({
+    message: 'The request payload is invalid',
+    payload: res.body,
+  }))
+  .error('unauthorisedError', 'UNAUTHORIZED', () => ({
+    message: 'You must log in first',
+  }));
 ```
 
-### Features
+Convenient shortcuts are provided for the most common statuses (each forwards to `error` internally and augments the generic `Opts['error']` type):
 
-#### Result type
-
-- `Result` type is a union type of `Ok` and `Err` type.
-- When you call a method that returns a `Result` type, you can use methods on `Result` to handle the result.
-- When the api succeeds, It will yield an `Ok` type with the data.
-- When the api fails, It will yield an `Err` type with the error.
-
-When succeded with OK, the data comes in the `AspiSuccessOk` type, where additional information about the request and response is also provided.
-
-#### Error handling
-
-- The error handling is done using the `Result` type, which is a union type of `Ok` and `Err` type.
-- When called `json` method on the response, it will return either the AspiSuccessOk with the data or AspiError with the error as well as JSON parsing error.
-- Additionally, user can define custom errors to handle specific http status codes, those errors can be pattern matched using any pattern matching library.
-
-#### API Descriptions
-
-##### WithResult
-
-By default, the response is not wrapped in the Result type. It will be a tuple of the value and error. both can be null but only one will be non-null at a time. If you want the response to be wrapped in the Result type, you can call `withResult` method on the response.
-
-```typescript
-const response = await new Aspi({ baseUrl: '...' })
-  .get('...')
-  .json<{ data: any }>();
-
-// [AspiResultOk<AspiRequestInit, {  data: any; }> | null, JSONParseError | AspiError<AspiRequestInit> | null]
+```ts
+api.notFound(cb)               // 404
+api.tooManyRequests(cb)        // 429
+api.conflict(cb)               // 409
+api.badRequest(cb)             // 400
+api.unauthorised(cb)           // 401 (British spelling, matches the Request API)
+api.forbidden(cb)              // 403
+api.notImplemented(cb)         // 501
+api.internalServerError(cb)    // 500
 ```
 
-The above response is a tuple of the value and error. The value itself is wrapped in the AspiResultOk type. It contains the request and response information as well as the data. If you want the response to be wrapped in the Result type, you can call `withResult` method on the response.
+These helpers allow you to write:
 
-```typescript
-const response = await new Aspi({ baseUrl: '...' })
-  .get('...')
-  .withResult()
-  .json<{ data: any }>();
-
-// Result<AspiResultOk<AspiRequestInit, { data: any; }>, JSONParseError | AspiError<AspiRequestInit>>
+```ts
+api.get('/secret')
+   .unauthorised(() => ({ message: 'You need a token' }))
+   .withResult()
+   .json()
+   .then((res) =>
+     Result.match(res, {
+       onOk: (data) => console.log(data),
+       onErr: (err) => {
+         if (err.tag === 'unauthorisedError') {
+           console.warn(err.data.message);
+         }
+       },
+     })
+   );
 ```
 
-The above response is a Result type. It can be pattern matched using any pattern matching library. We also pack one custom Result implementation that can be used to pattern match the response.
+---
 
-```typescript
-// handling all the errors
-const resultWithoutError = Result.pipe(
-  response,
-  Result.map((data) => data.data),
-  Result.catchError('aspiError', () => {
-    console.log('aspi error');
-  }),
-  Result.catchError('jsonParseError', () =>
-    console.log('failed to parse json error'),
-  ),
-);
+## API reference (selected)
 
-// Result<AspiResultOk<AspiRequestInit, { data: any; }>, never>
-```
+```ts
+class Request<
+  Method extends HttpMethods,
+  TRequest extends AspiRequestInitWithBody = AspiRequestInit,
+  Opts extends Record<any, any> = { error: {} }
+> {
+  // core request factories
+  get(path: string): Request<'GET', TRequest, Opts>;
+  post(path: string): Request<'POST', TRequest, Opts>;
+  put(path: string): Request<'PUT', TRequest, Opts>;
+  patch(path: string): Request<'PATCH', TRequest, Opts>;
+  delete(path: string): Request<'DELETE', TRequest, Opts>;
+  head(path: string): Request<'HEAD', TRequest, Opts>;
+  options(path: string): Request<'OPTIONS', TRequest, Opts>;
 
-##### Schema Validation
+  // configuration
+  setBaseUrl(url: BaseURL): this;
+  setHeaders(headers: HeadersInit): this;
+  setHeader(key: string, value: string): this;
+  setBearer(token: string): this;
+  setRetry(cfg: AspiRetryConfig<TRequest>): this;
+  setQueryParams(
+    params:
+      | Record<string, string>
+      | string[][]
+      | string
+      | URLSearchParams
+  ): this;
+  use<T extends TRequest, U extends TRequest>(fn: RequestTransformer<T, U>): Request<U>;
 
-Aspi by default implements schema validation using StandardSchemaV1. It means, as of now, it only supports Zod, Arktype and Valibot. If you want to use schema validation, you can call the `schema` method on the response.
-
-```typescript
-import { aspi, Result } from 'aspi';
-import { z, ZodError } from 'zod';
-
-// JSON Placeholder API Client
-const apiClient = new Aspi({
-  baseUrl: 'https://jsonplaceholder.typicode.com',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-const getTodo = async (id: number) => {
-  const response = await apiClient
-    .get(`/todos/${id}`)
-    .withResult()
-    .schema(
-      z.object({
-        id: z.number(),
-        title: z.string(),
-        completed: z.boolean(),
-      }),
-    )
-    .json();
-
-  Result.match(response, {
-    onOk: (data) => {
-      console.log(data);
-    },
-    onErr: (err) => {
-      if (err.tag === 'parseError') {
-        const error = err.data as ZodError;
-        console.error(error.errors);
-      } else {
-        // do something else
+  // schema validation
+  schema<TSchema extends StandardSchemaV1>(schema: TSchema): Request<
+    Method,
+    TRequest,
+    Merge<
+      Omit<Opts, 'schema'>,
+      {
+        schema: TSchema;
+        error: Merge<
+          Opts['error'],
+          {
+            parseError: CustomError<
+              'parseError',
+              StandardSchemaV1.FailureResult['issues']
+            >;
+          }
+        >;
       }
-    },
-  });
-};
+    >
+  >;
+
+  // result / throwable toggles
+  withResult(): Request<
+    Method,
+    TRequest,
+    Merge<
+      Omit<Opts, 'withResult' | 'throwable'>,
+      {
+        withResult: true;
+        throwable: false;
+      }
+    >
+  >;
+  throwable(): Request<
+    Method,
+    TRequest,
+    Merge<
+      Omit<Opts, 'withResult' | 'throwable'>,
+      {
+        withResult: false;
+        throwable: true;
+      }
+    >
+  >;
+
+  // custom error handling
+  error<Tag extends string, A extends {}>(
+    tag: Tag,
+    status: HttpErrorStatus,
+    cb: CustomErrorCb<TRequest, A>,
+  ): Request<
+    Method,
+    TRequest,
+    Merge<
+      Omit<Opts, 'error'>,
+      {
+        error: {
+          [K in Tag | keyof Opts['error']]: K extends Tag
+            ? CustomError<Tag, A>
+            : Opts['error'][K];
+        };
+      }
+    >
+  >;
+  notFound<A>(cb: CustomErrorCb<TRequest, A>): this;
+  tooManyRequests<A>(cb: CustomErrorCb<TRequest, A>): this;
+  conflict<A>(cb: CustomErrorCb<TRequest, A>): this;
+  badRequest<A>(cb: CustomErrorCb<TRequest, A>): this;
+  unauthorised<A>(cb: CustomErrorCb<TRequest, A>): this;
+  forbidden<A>(cb: CustomErrorCb<TRequest, A>): this;
+  notImplemented<A>(cb: CustomErrorCb<TRequest, A>): this;
+  internalServerError<A>(cb: CustomErrorCb<TRequest, A>): this;
+
+  // helpers
+  url(): string;
+
+  // response parsers
+  json<T extends StandardSchemaV1.InferOutput<Opts['schema']>>(): Promise<
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, T>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+          | JSONParseError
+        >
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, T>
+        : [
+            AspiResultOk<TRequest, T> | null,
+            (
+              | AspiError<TRequest>
+              | (Opts extends { error: any }
+                  ? Opts['error'][keyof Opts['error']]
+                  : never)
+              | JSONParseError
+            )
+              | null
+          ]
+  >;
+  text(): Promise<
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, string>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+        >
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, string>
+        : [
+            AspiResultOk<TRequest, string> | null,
+            (
+              | AspiError<TRequest>
+              | (Opts extends { error: any }
+                  ? Opts['error'][keyof Opts['error']]
+                  : never)
+            )
+              | null
+          ]
+  >;
+  blob(): Promise<
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, Blob>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+        >
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, Blob>
+        : [
+            AspiResultOk<TRequest, Blob> | null,
+            (
+              | AspiError<TRequest>
+              | (Opts extends { error: any }
+                  ? Opts['error'][keyof Opts['error']]
+                  : never)
+            )
+              | null
+          ]
+  >;
+}
 ```
+
+---
+
+## License
+
+MIT © Aspi contributors
