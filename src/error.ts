@@ -83,13 +83,12 @@ export class CustomError<Tag extends string, A> extends Error {
  * @interface JSONParseError
  * @extends {CustomError<'jsonParseError', { message: string }>}
  */
-export interface JSONParseError
-  extends CustomError<
-    'jsonParseError',
-    {
-      message: string;
-    }
-  > {}
+export interface JSONParseError extends CustomError<
+  'jsonParseError',
+  {
+    message: string;
+  }
+> {}
 
 export const isAspiError = <TReq extends AspiRequestInit>(
   error: unknown,
