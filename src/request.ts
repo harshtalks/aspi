@@ -22,7 +22,6 @@ import type {
 } from './types';
 import * as Result from './result';
 import type { StandardSchemaV1 } from './standard-schema';
-import { Aspi } from './aspi';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -74,8 +73,8 @@ export class Request<
       ...requestOptions.requestConfig,
       method: method,
     };
-    this.#retryConfig = requestOptions.retryConfig;
-    this.#customErrorCbs = requestOptions.errorCbs || {};
+    this.#retryConfig = { ...(requestOptions?.retryConfig || {}) };
+    this.#customErrorCbs = { ...(requestOptions?.errorCbs || {}) };
     this.#throwOnError = requestOptions.throwOnError || false;
     this.#shouldBeResult = requestOptions.shouldBeResult || false;
   }
@@ -503,10 +502,38 @@ export class Request<
    * const qp = new URLSearchParams({ page: '1' });
    * request.setQueryParams(qp);
    */
-  setQueryParams<
-    T extends Record<string, string> | string[][] | string | URLSearchParams,
-  >(params: T) {
-    this.#queryParams = new URLSearchParams(params);
+  setQueryParams<T = any>(params: T) {
+    let qp: URLSearchParams;
+
+    if (params instanceof URLSearchParams) {
+      // Clone existing URLSearchParams
+      qp = new URLSearchParams(params);
+    } else if (typeof params === 'string') {
+      // Parse a raw query string
+      qp = new URLSearchParams(params);
+    } else if (Array.isArray(params)) {
+      // Assume an array of key/value tuples
+      qp = new URLSearchParams();
+      for (const entry of params as any[]) {
+        if (Array.isArray(entry) && entry.length === 2) {
+          qp.append(String(entry[0]), String(entry[1]));
+        }
+      }
+    } else if (typeof params === 'object' && params !== null) {
+      // Convert a plain object: values are stringified
+      qp = new URLSearchParams();
+      for (const [key, value] of Object.entries(
+        params as Record<string, unknown>,
+      )) {
+        qp.append(key, String(value));
+      }
+    } else {
+      // Fallback: nothing to encode; use empty params
+      qp = new URLSearchParams();
+    }
+
+    this.#queryParams = qp;
+
     // @ts-ignore
     return this as Request<
       Method,
@@ -877,23 +904,70 @@ export class Request<
   }
 
   #url() {
+    // If path is already absolute, ignore baseUrl entirely
+    if (this.#path.startsWith('http://') || this.#path.startsWith('https://')) {
+      const absolute = new URL(this.#path);
+
+      // Merge any queryParams onto the absolute URL
+      if (this.#queryParams) {
+        for (const [k, v] of this.#queryParams.entries()) {
+          absolute.searchParams.append(k, v);
+        }
+      }
+
+      return absolute.toString();
+    }
+
     const passedBaseUrl =
       typeof this.#localRequestInit.baseUrl === 'string'
         ? this.#localRequestInit.baseUrl
         : this.#localRequestInit.baseUrl.toString();
 
-    // Normalize base URL by removing trailing slashes
-    const baseUrl = passedBaseUrl.replace(/\/+$/, '') ?? '';
+    // Strip trailing slashes from base
+    const base = passedBaseUrl.replace(/\/+$/, '');
 
-    // Ensure path starts with exactly one forward slash
-    const path = this.#path.replace(/^\/+/, '/');
+    // Split path into path+query and fragment
+    const [rawPathAndQuery, fragment] = this.#path.split('#', 2);
+    const [rawPath, existingQuery] = rawPathAndQuery.split('?', 2);
 
-    // Safely concatenate URL parts and handle query params
-    const queryString = this.#queryParams
-      ? `?${this.#queryParams.toString()}`
-      : '';
+    // Normalise path
+    let path = rawPath || '';
+    // collapse leading slashes
+    path = path.replace(/^\/+/, '');
+    // collapse internal multiple slashes to single
+    path = path.replace(/\/{2,}/g, '/');
 
-    const url = [baseUrl, path, queryString].filter(Boolean).join('');
+    // Remove any trailing slash from the normalized path
+    path = path.replace(/\/+$/, '');
+
+    if (path) {
+      path = '/' + path.replace(/^\/+/, '');
+    }
+
+    // Start with any query from the path
+    const qs = new URLSearchParams(existingQuery ?? '');
+
+    // Merge Request-level queryParams
+    if (this.#queryParams) {
+      for (const [k, v] of this.#queryParams.entries()) {
+        qs.append(k, v);
+      }
+    }
+
+    const queryString = qs.toString();
+
+    let url = base + path;
+
+    if (queryString) {
+      url += `?${queryString}`;
+    }
+
+    if (fragment) {
+      url += `#${fragment}`;
+    }
+
+    // Ensure the final URL does not end with a trailing slash
+    url = url.replace(/\/+$/, '');
 
     return url;
   }
@@ -1285,8 +1359,9 @@ export class Request<
     return {
       response,
       status: response.status as HttpErrorCodes,
-      statusText: getHttpErrorStatus(response.status as HttpErrorCodes),
+      statusLabel: getHttpErrorStatus(response.status as HttpErrorCodes),
       responseData,
+      statusText: response.statusText,
     };
   }
 

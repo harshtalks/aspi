@@ -69,23 +69,22 @@ export type AspiConfigBase = {
  *   | 'signal'>,
  *   AspiConfigBase>
  */
-export interface AspiRequestInitWithoutBodyAndMethod
-  extends Merge<
-    Pick<
-      RequestInit,
-      | 'headers'
-      | 'mode'
-      | 'credentials'
-      | 'cache'
-      | 'redirect'
-      | 'referrer'
-      | 'referrerPolicy'
-      | 'integrity'
-      | 'keepalive'
-      | 'signal'
-    >,
-    AspiConfigBase
-  > {}
+export interface AspiRequestInitWithoutBodyAndMethod extends Merge<
+  Pick<
+    RequestInit,
+    | 'headers'
+    | 'mode'
+    | 'credentials'
+    | 'cache'
+    | 'redirect'
+    | 'referrer'
+    | 'referrerPolicy'
+    | 'integrity'
+    | 'keepalive'
+    | 'signal'
+  >,
+  AspiConfigBase
+> {}
 
 /**
  * Configuration for an Aspi request that may include a request body.
@@ -96,11 +95,10 @@ export interface AspiRequestInitWithoutBodyAndMethod
  * @template TBody - The type of the request body (defaults to `any`).
  * @extends Merge<Pick<RequestInit, 'body'>, AspiRequestInitWithoutBody>
  */
-export interface AspiRequestInit<TBody = any>
-  extends Merge<
-    Pick<RequestInit, 'body' | 'method'>,
-    Omit<AspiRequestInitWithoutBodyAndMethod, 'retryConfig'>
-  > {}
+export interface AspiRequestInit<TBody = any> extends Merge<
+  Pick<RequestInit, 'body' | 'method'>,
+  Omit<AspiRequestInitWithoutBodyAndMethod, 'retryConfig'>
+> {}
 
 /**
  * Configuration options for retrying an Aspi request.
@@ -285,6 +283,11 @@ export interface AspiRequest<T extends AspiRequestInit> {
  * @property {TData} [responseData] - The parsed response body. When `IsError` is `true` this property is required; otherwise it is optional.
  */
 export type AspiResponse<TData = any, IsError extends boolean = false> = Merge<
-  { status: HttpErrorCodes; statusText: HttpErrorStatus; response: Response },
+  {
+    status: HttpErrorCodes;
+    statusLabel: HttpErrorStatus;
+    response: Response;
+    statusText: string;
+  },
   IsError extends true ? { responseData: TData } : { responseData?: any }
 >;

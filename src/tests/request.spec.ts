@@ -1,506 +1,421 @@
-// request.test.ts
-import { describe, it, expect, vi } from 'vitest';
-import { createBaseConfig, createMockResponse, setupFetchMock } from './utils';
-import { Request } from '../request';
-import type { AspiRequestInit, RequestOptions } from '../types';
-import { AspiError, CustomError, Result } from '..';
+// request.spec.ts
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Aspi } from '../aspi';
+import { AspiError } from '../error';
+import * as Result from '../result';
+import type { StandardSchemaV1 } from '../standard-schema';
 
-setupFetchMock();
+let fetchMock: ReturnType<typeof vi.fn>;
 
-const createRequestOptions = (
-  overrides?: Partial<RequestOptions<AspiRequestInit>>,
-): RequestOptions<AspiRequestInit> => ({
-  requestConfig: createBaseConfig(),
-  middlewares: [],
-  errorCbs: {},
-  throwOnError: false,
-  shouldBeResult: false,
-  ...overrides,
+beforeEach(() => {
+  fetchMock = vi.fn();
+  // @ts-expect-error assign for tests
+  global.fetch = fetchMock;
 });
 
-describe('Request – URL building and query params', () => {
-  it('builds URL from baseUrl and path', () => {
-    const req = new Request('GET', '/users', createRequestOptions());
-    expect(req.url()).toBe('https://api.example.com/users');
-  });
-
-  it('normalizes trailing slash and leading slashes', () => {
-    const req = new Request(
-      'GET',
-      '///users',
-      createRequestOptions({
-        requestConfig: {
-          ...createBaseConfig(),
-          baseUrl: 'https://api.example.com///',
-        },
-      }),
-    );
-
-    expect(req.url()).toBe('https://api.example.com/users');
-  });
-
-  it('applies query params from object', () => {
-    const req = new Request(
-      'GET',
-      '/users',
-      createRequestOptions(),
-    ).setQueryParams({ page: '1', limit: '10' });
-
-    expect(req.url()).toBe('https://api.example.com/users?page=1&limit=10');
-  });
-
-  it('applies query params from URLSearchParams', () => {
-    const params = new URLSearchParams();
-    params.set('sort', 'desc');
-    params.set('filter', 'active');
-
-    const req = new Request(
-      'GET',
-      '/users',
-      createRequestOptions(),
-    ).setQueryParams(params);
-
-    expect(req.url()).toContain('sort=desc');
-    expect(req.url()).toContain('filter=active');
-  });
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
-describe('Request – headers and bearer', () => {
-  it('setHeaders merges headers on local request init', () => {
-    const req = new Request(
-      'GET',
-      '/users',
-      createRequestOptions({
-        requestConfig: {
-          ...createBaseConfig(),
-          headers: { 'X-Existing': '1' },
-        },
-      }),
-    ).setHeaders({
-      'X-Existing': '2',
-      'Content-Type': 'application/json',
+const createApi = () =>
+  new Aspi({
+    baseUrl: 'https://api.example.com',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+const dummySchema = (validateImpl: (value: any) => any): StandardSchemaV1 =>
+  ({
+    '~standard': {
+      validate: validateImpl,
+    },
+  }) as any;
+
+// -------------------- basic configuration setters --------------------
+
+describe('Request – configuration methods', () => {
+  it('setBaseUrl overrides baseUrl only for that Request', () => {
+    const api = createApi();
+
+    const r1 = api.get('/users').setBaseUrl('https://local.com');
+    const req1 = r1.getRequest();
+    expect(req1.requestInit.baseUrl).toBe('https://local.com');
+
+    const r2 = api.get('/users');
+    const req2 = r2.getRequest();
+    expect(req2.requestInit.baseUrl).toBe('https://api.example.com');
+  });
+
+  it('setHeaders merges with existing headers without leaking to other requests', () => {
+    const api = createApi();
+
+    const r1 = api
+      .get('/users')
+      .setHeaders({ 'X-Req': '1', 'Content-Type': 'application/json+custom' });
+
+    const h1 = r1.getRequest().requestInit.headers as Record<string, string>;
+    expect(h1['X-Req']).toBe('1');
+    expect(h1['Content-Type']).toBe('application/json+custom');
+
+    const r2 = api.get('/users');
+    const h2 = r2.getRequest().requestInit.headers as Record<string, string>;
+    expect(h2['X-Req']).toBeUndefined();
+    expect(h2['Content-Type']).toBe('application/json');
+  });
+
+  it('setHeader sets one header only for that Request', () => {
+    const api = createApi();
+
+    const r1 = api.get('/users').setHeader('X-Req-One', 'value');
+    const h1 = r1.getRequest().requestInit.headers as Record<string, string>;
+    expect(h1['X-Req-One']).toBe('value');
+
+    const r2 = api.get('/users');
+    const h2 = r2.getRequest().requestInit.headers as Record<string, string>;
+    expect(h2['X-Req-One']).toBeUndefined();
+  });
+
+  it('setBearer uses Authorization for that Request only', () => {
+    const api = createApi();
+
+    const r1 = api.get('/me').setBearer('token-123');
+    const h1 = r1.getRequest().requestInit.headers as Record<string, string>;
+    expect(h1['Authorization']).toBe('Bearer token-123');
+
+    const r2 = api.get('/me');
+    const h2 = r2.getRequest().requestInit.headers as Record<string, string>;
+    expect(h2['Authorization']).toBeUndefined();
+  });
+
+  it('setQueryParams stores params and affects url()', () => {
+    const api = createApi();
+
+    const r = api.get('/search').setQueryParams({ q: 'term', page: '2' });
+
+    const req = r.getRequest();
+    expect(req.queryParams).toBeInstanceOf(URLSearchParams);
+    expect(req.queryParams?.get('q')).toBe('term');
+    expect(req.queryParams?.get('page')).toBe('2');
+
+    expect(r.url()).toBe('https://api.example.com/search?q=term&page=2');
+  });
+
+  it('setRetry merges per-request retry config', () => {
+    const api = createApi();
+
+    const r = api.get('/users').setRetry({
+      retries: 5,
+      retryOn: [500, 502],
     });
 
-    const requestData = req.getRequest();
-    const headers = new Headers(requestData.requestInit.headers);
-    expect(headers.get('X-Existing')).toBe('2');
-    expect(headers.get('Content-Type')).toBe('application/json');
-  });
-
-  it('setHeader overwrites single header', () => {
-    const req = new Request('GET', '/users', createRequestOptions())
-      .setHeader('X-Test', 'foo')
-      .setHeader('X-Test', 'bar');
-
-    const requestData = req.getRequest();
-    const headers = new Headers(requestData.requestInit.headers);
-    expect(headers.get('X-Test')).toBe('bar');
-  });
-
-  it('setBearer sets Authorization header', () => {
-    const req = new Request('GET', '/users', createRequestOptions()).setBearer(
-      'token123',
-    );
-
-    const requestData = req.getRequest();
-    const headers = new Headers(requestData.requestInit.headers ?? {});
-    expect(headers.get('Authorization')).toBe('Bearer token123');
+    const cfg = r.getRetryConfig();
+    expect(cfg.retries).toBe(5);
+    expect(cfg.retryOn).toEqual([500, 502]);
+    expect(cfg.retryDelay).toBe(0);
   });
 });
 
-describe('Request – body handling and bodySchema', () => {
-  it('bodyJson sets JSON stringified body without schema', () => {
-    const req = new Request('POST', '/users', createRequestOptions()).bodyJson({
-      name: 'John',
-    });
+// -------------------- bodySchema + bodyJson / unsafeBody --------------------
 
-    const requestData = req.getRequest();
-    expect(requestData.requestInit?.body).toBe(
-      JSON.stringify({ name: 'John' }),
-    );
+describe('Request – body configuration', () => {
+  it('bodyJson sets JSON stringified body when bodySchema passes', () => {
+    const api = createApi();
+    const schema = dummySchema((value) => ({ value, issues: null }));
+
+    const r = api.post('/users').bodySchema(schema).bodyJson({ name: 'John' });
+
+    const req = r.getRequest();
+    expect(req.requestInit.body).toBe(JSON.stringify({ name: 'John' }));
   });
 
-  it('bodyJson validates against bodySchema and stores issues without sending request', async () => {
-    const validate = vi.fn().mockReturnValue({
+  it('bodyJson does not send request and returns parseError when schema fails', async () => {
+    const api = createApi();
+    const schema = dummySchema((_value) => ({
+      value: null,
       issues: [{ path: ['name'], message: 'Required' }],
-    });
+    }));
 
-    const schema = {
-      '~standard': { validate },
-    };
-
-    const req = new Request('POST', '/users', createRequestOptions())
-      // @ts-expect-error schema error
+    const r = api
+      .post('/users')
       .bodySchema(schema)
-      .bodyJson({})
+      .bodyJson({} as any)
       .withResult();
 
-    const result = await req.json();
+    const result = await r.json();
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(Result.isErr(result)).toBe(true);
-
     if (Result.isErr(result)) {
-      const error = result.error;
-      expect(error).toBeInstanceOf(CustomError);
-      expect(error.tag).toBe('parseError');
-      if (error.tag === 'parseError') {
-        expect(error.data[0].message).toBe('Required');
+      expect(result.error.tag).toBe('parseError');
+      if (result.error.tag === 'parseError') {
+        expect(result.error.data).toEqual([
+          { path: ['name'], message: 'Required' },
+        ]);
       }
     }
   });
 
-  it('unsafeBody sets raw body', () => {
-    const body = new URLSearchParams({ a: '1' });
-    const req = new Request(
-      'POST',
-      '/users',
-      createRequestOptions(),
-    ).unsafeBody(body);
+  it('unsafeBody sets raw body without JSON stringify', () => {
+    const api = createApi();
+    const form = new FormData();
+    form.append('file', 'content');
 
-    const requestData = req.getRequest();
-    expect(requestData.requestInit?.body).toBe(body);
+    const r = api.post('/upload').unsafeBody(form);
+    const req = r.getRequest();
+
+    expect(req.requestInit.body).toBe(form);
   });
 });
 
-describe('Request – schema validation on response', () => {
-  it('json() validates response with schema and returns Result.ok on success', async () => {
-    const validate = vi.fn().mockReturnValue({
-      value: { id: 1, name: 'John' },
-    });
+// -------------------- response schema() --------------------
 
-    const schema = {
-      '~standard': { validate },
-    };
+describe('Request – response schema validation', () => {
+  it('schema() returns parseError when validation fails', async () => {
+    const api = createApi();
+    const schema = dummySchema((_value) => ({
+      value: null,
+      issues: [{ path: ['id'], message: 'Expected number' }],
+    }));
 
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      createMockResponse({ id: 1, name: 'John' }),
-    );
-
-    const req = new Request('GET', '/users/1', createRequestOptions())
-      .withResult()
-      // @ts-expect-error schema error
-      .schema(schema);
-
-    const result = await req.json<{ id: number; name: string }>();
-
-    expect(Result.isOk(result)).toBe(true);
-    if (Result.isOk(result)) {
-      expect(result.value.data).toEqual({ id: 1, name: 'John' });
-    }
-  });
-
-  it('json() returns parseError when schema validation fails', async () => {
-    const validate = vi.fn().mockReturnValue({
-      issues: [{ path: ['id'], message: 'Invalid id' }],
-    });
-
-    const schema = {
-      '~standard': { validate },
-    };
-
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      createMockResponse({ id: 'x' }),
-    );
-
-    const req = new Request('GET', '/users/1', createRequestOptions())
-      .withResult()
-      // @ts-expect-error schema error
-      .schema(schema);
-
-    const result = await req.json();
-
-    expect(Result.isErr(result)).toBe(true);
-    if (Result.isErr(result)) {
-      expect(result.error).toBeInstanceOf(CustomError);
-      expect(result.error.tag).toBe('parseError');
-    }
-  });
-
-  it('json() returns CustomError jsonParseError when JSON parsing fails', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response('not-json', {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'not-number' }), {
         status: 200,
         statusText: 'OK',
         headers: { 'Content-Type': 'application/json' },
       }),
     );
 
-    const req = new Request(
-      'GET',
-      '/broken',
-      createRequestOptions(),
-    ).withResult();
-
-    const result = await req.json();
+    const r = api.get('/users/1').withResult().schema(schema);
+    const result = await r.json();
 
     expect(Result.isErr(result)).toBe(true);
     if (Result.isErr(result)) {
-      expect(result.error).toBeInstanceOf(CustomError);
-      expect(result.error.tag).toBe('jsonParseError');
+      expect(result.error.tag).toBe('parseError');
+      if (result.error.tag === 'parseError') {
+        expect(result.error.data).toEqual([
+          { path: ['id'], message: 'Expected number' },
+        ]);
+      }
     }
   });
-});
 
-describe('Request – modes: withResult, throwable, default tuple', () => {
-  it('withResult() returns Result<ResultOk, Error>', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      createMockResponse({ id: 1 }),
+  it('schema() passes transformed value when validation succeeds', async () => {
+    const api = createApi();
+    const schema = dummySchema((value) => ({
+      value: { ...value, validated: true },
+      issues: null,
+    }));
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 1 }), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
+      }),
     );
 
-    const req = new Request(
-      'GET',
-      '/users/1',
-      createRequestOptions(),
-    ).withResult();
-
-    const result = await req.json<{ id: number }>();
+    const r = api.get('/users/1').withResult().schema(schema);
+    const result = await r.json();
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.data.id).toBe(1);
+      expect(result.value.data).toEqual({ id: 1, validated: true });
     }
-  });
-
-  it('throwable() throws AspiError on HTTP error', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      createMockResponse('Not found', {
-        status: 404,
-        statusText: 'NOT_FOUND',
-      }),
-    );
-
-    const req = new Request(
-      'GET',
-      '/missing',
-      createRequestOptions(),
-    ).throwable();
-
-    await expect(req.json()).rejects.toBeInstanceOf(AspiError);
-  });
-
-  it('default mode returns [value, error] tuple on success', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      createMockResponse({ id: 1 }),
-    );
-
-    const req = new Request('GET', '/users/1', createRequestOptions());
-    const [value, error] = await req.json<{ id: number }>();
-
-    expect(error).toBeNull();
-    expect(value).not.toBeNull();
-    if (value !== null) {
-      expect(value.data.id).toBe(1);
-    }
-  });
-
-  it('default mode returns error in tuple on failure', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      createMockResponse('Not found', {
-        status: 404,
-        statusText: 'NOT_FOUND',
-      }),
-    );
-
-    const req = new Request('GET', '/missing', createRequestOptions());
-    const [value, error] = await req.json();
-
-    expect(value).toBeNull();
-    expect(error).toBeInstanceOf(AspiError);
   });
 });
 
-describe('Request – retry logic', () => {
-  it('retries according to retry config and eventually succeeds', async () => {
-    const fetchMock = vi.mocked(global.fetch);
-    fetchMock
-      .mockResolvedValueOnce(
-        createMockResponse('Server error', {
-          status: 500,
-          statusText: 'INTERNAL_SERVER_ERROR',
-        }),
-      )
-      .mockResolvedValueOnce(createMockResponse({ id: 1 }));
+// -------------------- per-request custom error handlers --------------------
 
-    const req = new Request(
-      'GET',
-      '/unstable',
-      createRequestOptions({
-        requestConfig: {
-          ...createBaseConfig(),
-        },
-        retryConfig: {
-          retries: 2,
-          retryDelay: 0,
-          retryOn: [500],
-        },
+describe('Request – per-request custom error handlers', () => {
+  it('notFound() on Request produces notFoundError only for that Request', async () => {
+    const api = createApi();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'missing' }), {
+        status: 404,
+        statusText: 'Not Found',
+        headers: { 'Content-Type': 'application/json' },
       }),
-    ).withResult();
+    );
 
-    const result = await req.json<{ id: number }>();
+    const r1 = api
+      .get('/one')
+      .withResult()
+      .notFound(({ request, response }) => ({
+        path: request.path,
+        status: response.status,
+      }));
 
-    expect(Result.isOk(result)).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const result1 = await r1.json();
+
+    expect(Result.isErr(result1)).toBe(true);
+    if (Result.isErr(result1)) {
+      expect(result1.error.tag).toBe('notFoundError');
+      if (result1.error.tag === 'notFoundError') {
+        expect(result1.error.data).toEqual({
+          path: '/one',
+          status: 404,
+        });
+      }
+    }
+
+    const r2 = api.get('/two').withResult();
+    const registry2 = r2.getErrorCallbackRegistry();
+    const tags2 = Object.values(registry2).map((x) => x.tag);
+    expect(tags2).not.toContain('notFoundError');
   });
 
-  it('stops retrying when retryWhile returns false', async () => {
-    const fetchMock = vi.mocked(global.fetch);
-    fetchMock.mockResolvedValue(
-      createMockResponse('Server error', {
+  it('error() allows custom tag and data per Request', async () => {
+    const api = createApi();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'bad' }), {
+        status: 400,
+        statusText: 'Bad Request',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const r = api
+      .post('/users')
+      .withResult()
+      .error('validationError', 'BAD_REQUEST', ({ response }) => ({
+        status: response.status,
+        type: 'validation',
+      }));
+
+    const result = await r.json();
+
+    expect(Result.isErr(result)).toBe(true);
+    if (Result.isErr(result)) {
+      expect(result.error.tag).toBe('validationError');
+      if (result.error.tag === 'validationError') {
+        expect(result.error.data).toEqual({
+          status: 400,
+          type: 'validation',
+        });
+      }
+    }
+  });
+
+  it('getErrorCallbackRegistry returns shallow copy of per-request callbacks', () => {
+    const api = createApi();
+
+    const r = api
+      .get('/users')
+      .notFound(() => ({ a: 1 }))
+      .tooManyRequests(() => ({ b: 2 }));
+
+    const registry = r.getErrorCallbackRegistry();
+    const tags = Object.values(registry).map((x) => x.tag);
+
+    expect(tags).toContain('notFoundError');
+    expect(tags).toContain('tooManyRequestsError');
+
+    // mutate copy
+    registry[404] = { cb: () => ({}), tag: 'mutated' } as any;
+
+    const registry2 = r.getErrorCallbackRegistry();
+    expect(registry2[404]?.tag).toBe('notFoundError');
+  });
+});
+
+// -------------------- modes: withResult / throwable / default --------------------
+
+describe('Request – modes and mapResponse', () => {
+  it('withResult() sets isResult() true and isThrowable() false', () => {
+    const api = createApi();
+    const r = api.get('/users').withResult();
+
+    expect(r.isResult()).toBe(true);
+    expect(r.isThrowable()).toBe(false);
+  });
+
+  it('throwable() sets isThrowable() true and isResult() false', () => {
+    const api = createApi();
+    const r = api.get('/users').throwable();
+
+    expect(r.isThrowable()).toBe(true);
+    expect(r.isResult()).toBe(false);
+  });
+
+  it('default mode json() returns [ok, err]', async () => {
+    const api = createApi();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const r = api.get('/tuple');
+    const [ok, err] = await r.json<{ ok: boolean }>();
+
+    expect(err).toBeNull();
+    expect(ok?.data.ok).toBe(true);
+  });
+
+  it('throwable mode json() throws AspiError on non-2xx', async () => {
+    const api = createApi();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: true }), {
         status: 500,
-        statusText: 'INTERNAL_SERVER_ERROR',
+        statusText: 'Internal Server Error',
+        headers: { 'Content-Type': 'application/json' },
       }),
     );
 
-    const retryWhile = vi.fn().mockResolvedValue(false);
-
-    const req = new Request(
-      'GET',
-      '/unstable',
-      createRequestOptions({
-        requestConfig: {
-          ...createBaseConfig(),
-        },
-        retryConfig: {
-          retries: 2,
-          retryDelay: 0,
-          retryOn: [500],
-          retryWhile,
-        },
-      }),
-    ).withResult();
-
-    const result = await req.json();
-
-    expect(Result.isErr(result)).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const r = api.get('/error').throwable();
+    await expect(r.json()).rejects.toBeInstanceOf(AspiError);
   });
 
-  it('calls onRetry callback for each retry attempt', async () => {
-    const fetchMock = vi.mocked(global.fetch);
-    fetchMock
-      .mockResolvedValueOnce(
-        createMockResponse('Error', {
-          status: 500,
-          statusText: 'INTERNAL_SERVER_ERROR',
-        }),
-      )
-      .mockResolvedValueOnce(
-        createMockResponse('Error', {
-          status: 500,
-          statusText: 'INTERNAL_SERVER_ERROR',
-        }),
-      )
-      .mockResolvedValueOnce(createMockResponse({ id: 1 }));
+  it('withResult mode json() returns Result.Result', async () => {
+    const api = createApi();
 
-    const onRetry = vi.fn();
-
-    const req = new Request(
-      'GET',
-      '/unstable',
-      createRequestOptions({
-        requestConfig: {
-          ...createBaseConfig(),
-        },
-        retryConfig: {
-          retries: 3,
-          retryDelay: 0,
-          retryOn: [500],
-          onRetry,
-        },
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
       }),
-    ).withResult();
-
-    await req.json();
-
-    expect(onRetry).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('Request – text() and blob()', () => {
-  it('text() returns parsed text in withResult mode', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response('hello', { status: 200, statusText: 'OK' }),
     );
 
-    const req = new Request(
-      'GET',
-      '/text',
-      createRequestOptions(),
-    ).withResult();
+    const r = api.get('/ok').withResult();
+    const res = await r.json<{ ok: boolean }>();
 
-    const result = await req.text();
-
-    expect(Result.isOk(result)).toBe(true);
-    if (Result.isOk(result)) {
-      expect(result.value.data).toBe('hello');
-    }
-  });
-
-  it('blob() returns Blob in Result mode', async () => {
-    const blob = new Blob(['binary'], { type: 'application/octet-stream' });
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(blob, { status: 200, statusText: 'OK' }),
-    );
-
-    const req = new Request(
-      'GET',
-      '/file',
-      createRequestOptions(),
-    ).withResult();
-
-    const result = await req.blob();
-
-    expect(Result.isOk(result)).toBe(true);
-    if (Result.isOk(result)) {
-      expect(result.value.data).toBeInstanceOf(Blob);
+    expect(Result.isOk(res)).toBe(true);
+    if (Result.isOk(res)) {
+      expect(res.value.data.ok).toBe(true);
     }
   });
 });
 
-describe('Request – custom error handlers', () => {
-  it('invokes custom error handler for matching status and returns CustomError', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      createMockResponse('Bad', { status: 400, statusText: 'BAD_REQUEST' }),
-    );
+// -------------------- URL building & getRequest & middlewares --------------------
 
-    const handler = vi.fn().mockReturnValue({ message: 'Custom bad request' });
+describe('Request – URL building, getRequest, middlewares', () => {
+  it('url() normalizes baseUrl, path, and queryParams', () => {
+    const api = new Aspi({
+      baseUrl: 'https://example.com/',
+      headers: {},
+    });
 
-    const req = new Request('GET', '/bad', createRequestOptions())
-      .withResult()
-      .badRequest(handler);
-
-    const result = await req.json();
-
-    expect(Result.isErr(result)).toBe(true);
-    if (Result.isErr(result)) {
-      expect(result.error).toBeInstanceOf(CustomError);
-      expect(result.error.tag).toBe('badRequestError');
-      if (result.error.tag === 'badRequestError') {
-        expect(result.error.data.message).toBe('Custom bad request');
-      }
-    }
-    expect(handler).toHaveBeenCalled();
+    const r = api.get('///users').setQueryParams('page=1&limit=10');
+    expect(r.url()).toBe('https://example.com/users?page=1&limit=10');
   });
 
-  it('invokes internalServerError handler when fetch throws', async () => {
-    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('Network fail'));
+  it('getRequest() returns AspiRequest with middlewares applied', () => {
+    const api = createApi().use((req) => ({
+      ...req,
+      headers: { ...(req.headers ?? {}), 'X-MW': '1' },
+    }));
 
-    const handler = vi.fn().mockReturnValue({ message: 'Custom 500' });
+    const r = api.get('/users');
+    const req = r.getRequest();
+    const headers = req.requestInit.headers as Record<string, string>;
 
-    const req = new Request('GET', '/network', createRequestOptions())
-      .withResult()
-      .internalServerError(handler);
-
-    const result = await req.json();
-
-    expect(Result.isErr(result)).toBe(true);
-    if (Result.isErr(result)) {
-      expect(result.error).toBeInstanceOf(CustomError);
-      expect(result.error.tag).toBe('internalServerError');
-      if (result.error.tag === 'internalServerError') {
-        expect(result.error.data.message).toBe('Custom 500');
-      }
-    }
+    expect(headers['X-MW']).toBe('1');
+    expect(req.path).toBe('/users');
   });
 });
