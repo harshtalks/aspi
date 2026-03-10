@@ -3,13 +3,13 @@
 A tiny, type‑safe wrapper around the native **fetch** API that gives you a clean, monadic interface for HTTP requests.
 It ships with **zero runtime dependencies**, a **tiny bundle size**, and full **TypeScript** support out of the box.
 
-> **Why use Aspi?**
-> • End‑to‑end TypeScript typings (request + response)
-> • No extra weight – only a thin wrapper around `fetch`
-> • Chain‑of‑responsibility middleware support via `use`
-> • Result‑based error handling (values as errors)
-> • Built‑in retry, header helpers, query‑string handling, and schema validation (Zod, Arktype, Valibot)
-> • Flexible error mapping with `error` and convenience shortcuts
+**Why use Aspi?**
+- End‑to‑end TypeScript typings (request + response)
+- No extra weight – only a thin wrapper around `fetch`
+- Chain‑of‑responsibility middleware support via `use`
+- Result‑based error handling (values as errors)
+- Built‑in retry, header helpers, query‑string handling, and schema validation (Zod, Arktype, Valibot)
+- Flexible error mapping with `error` and convenience shortcuts
 
 ---
 
@@ -63,6 +63,78 @@ async function getTodo(id: number) {
 
 getTodo(1);
 ```
+
+---
+
+
+## Why Aspi?
+
+
+Most real‑world codebases end up with one or more of these issues:
+
+1. **Inconsistent error handling**
+
+   - Some utilities throw raw `Error`/`AxiosError`.
+   - Others return `{ ok: false, error }` or `null` or a custom union.
+   - Callers don’t know whether to use `try/catch`, check `ok`, or both.
+
+2. **Retry logic duplicated everywhere**
+
+   - Each service rolls its own `while (attempt <= retries)` loop.
+   - Status codes, backoff strategies, and retry limits slowly diverge over time.
+   - There is no single place to see “how do we retry HTTP calls in this app?”.
+
+3. **Validation pushed far from the network boundary**
+
+   - Request payloads are sometimes validated, sometimes not.
+   - Response validation happens deep in the business logic (if at all).
+   - JSON parse errors leak as raw `SyntaxError`, not structured errors.
+
+4. **Configuration scattered across factories and interceptors**
+
+   - Base URL helpers, auth decorators, error mappers, retry plugins, and logging interceptors all live in different files.
+   - Global state / interceptors can make it hard to tell what a given request will actually do.
+
+5. **Type systems are bolted on, not designed in**
+
+   - Generic HTTP clients often expose `any` for responses.
+   - Error flows are not encoded in the type system, forcing manual guards and casting.
+
+## How Aspi fixes them
+
+Aspi’s design centers around three things:
+
+1. **Mode‑driven responses**
+
+   You decide at call‑site how you want to consume responses:
+
+   - `withResult()` → `json/text/blob` return a `Result.Result<Ok, ErrorUnion>`.
+   - `throwable()` → `json/text/blob` return `AspiPlainResponse` and throw on failure.
+   - Default → `json/text/blob` return `[ok, err]` tuples.
+
+   All error variants are **tagged** so they can be safely narrowed by `error.tag`.
+
+2. **Centralized, configurable retry layer**
+
+   Retry behavior is described declaratively:
+
+   - `retries`: max attempts.
+   - `retryDelay`: number or function `(attempt, maxAttempts, request, response) => delayMs`.
+   - `retryOn`: list of HTTP status codes that should trigger a retry.
+   - `retryWhile`: predicate `(request, response) => boolean` for custom retry conditions.
+   - `onRetry`: hook invoked after each retry attempt.
+
+   This configuration can be applied globally (`Aspi.setRetry`) and overridden per request (`Request.setRetry`).
+
+3. **Validation at the transport boundary**
+
+   Using a `StandardSchemaV1` interface, Aspi integrates with schema libraries (e.g. Zod, Valibot) to:
+
+   - Validate request bodies with `bodySchema` + `bodyJson` **before** the network call.
+   - Validate responses with `schema()` + `json()` **after** JSON parsing.
+
+   These failures appear as tagged `parseError` values with structured issue lists, not random runtime exceptions.
+
 
 ---
 
