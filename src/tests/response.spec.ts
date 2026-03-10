@@ -80,7 +80,7 @@ describe('Response – withResult + custom handlers', () => {
     }
   });
 
-  it('Aspi.internalServerError handler produces internalServerErrorError in withResult mode', async () => {
+  it('Aspi.internalServerError handler produces internalServerError in withResult mode', async () => {
     const api = createApi().internalServerError(({ response }) => ({
       statusText: response.statusText,
     }));
@@ -98,8 +98,8 @@ describe('Response – withResult + custom handlers', () => {
 
     expect(Result.isErr(result)).toBe(true);
     if (Result.isErr(result)) {
-      expect(result.error.tag).toBe('internalServerErrorError');
-      if (result.error.tag === 'internalServerErrorError') {
+      expect(result.error.tag).toBe('internalServerError');
+      if (result.error.tag === 'internalServerError') {
         expect(result.error.data).toEqual({
           statusText: 'Internal Server Error',
         });

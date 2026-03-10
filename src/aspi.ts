@@ -399,7 +399,7 @@ export class Aspi<
    * api.internalServerError((req, res) => ({ message: 'Server error occurred' }));
    */
   internalServerError<A extends {}>(cb: CustomErrorCb<TRequest, A>) {
-    return this.error('internalServerErrorError', 'INTERNAL_SERVER_ERROR', cb);
+    return this.error('internalServerError', 'INTERNAL_SERVER_ERROR', cb);
   }
 
   /**
