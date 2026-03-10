@@ -1,5 +1,17 @@
 # aspi
 
+## 2.1.0
+
+### Minor Changes
+
+- f183e1e: rewrote test suite
+- 5ec8282: rewrote test suite
+- 2516f21: rewrote test suite
+
+### Patch Changes
+
+- a05a7ca: updated test suite
+
 ## 2.0.1
 
 ### Patch Changes
