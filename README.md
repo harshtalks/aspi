@@ -548,14 +548,16 @@ type Result<T, E> = Ok<T> | Err<E>;
 ```
 
 Creating Results
-```ts
-  import * as Result from './result';
 
-  const success = Result.ok(42);
-  const failure = Result.err('not found');
+```ts
+import * as Result from './result';
+
+const success = Result.ok(42);
+const failure = Result.err('not found');
 ```
 
 Checking and Extracting
+
 ```ts
 if (Result.isOk(success)) {
   console.log(success.value); // 42
@@ -576,6 +578,7 @@ const mustHaveValue = Result.getOrThrow(success); // 42
 ```
 
 Transforming
+
 ```ts
 // map value
 const doubled = Result.map(success, (n) => n * 2); // ok(84)
@@ -593,6 +596,7 @@ const message = Result.match(success, {
 
 Tagged error helpers
 When your error type is a union with a tag field, you can use helpers to handle specific variants:
+
 ```ts
 type HttpError =
   | { tag: 'BAD_REQUEST'; details?: string }
@@ -616,6 +620,7 @@ Result.catchErrors(result, {
 ```
 
 Pipe Utility
+
 ```ts
 import { pipe } from './result';
 
@@ -658,14 +663,17 @@ const myCapability: Capability = ({ request }) => ({
 
 Registering capabilities
 Capabilities are attached at the Aspi client level and apply to all requests created from that instance:
+
 ```ts
-const api = new Aspi({ baseUrl: 'https://api.example.com' })
-  .useCapability(myCapability);
+const api = new Aspi({ baseUrl: 'https://api.example.com' }).useCapability(
+  myCapability,
+);
 
 const user = await api.get('/users/1').throwable().json<User>();
 ```
 
 You can register multiple capabilities; they execute in the order they were added, each wrapping the next:
+
 ```ts
 const api = new Aspi({ baseUrl: 'https://api.example.com' })
   .useCapability(loggingCapability)
