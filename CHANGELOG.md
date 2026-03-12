@@ -1,5 +1,11 @@
 # aspi
 
+## 2.2.1
+
+### Patch Changes
+
+- ab4ea93: type issues in capability api
+
 ## 2.2.0
 
 ### Minor Changes
