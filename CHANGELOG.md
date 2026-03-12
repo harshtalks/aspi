@@ -1,5 +1,11 @@
 # aspi
 
+## 2.2.0
+
+### Minor Changes
+
+- c87a9cf: experimental capabilities and tests for result.ts
+
 ## 2.1.0
 
 ### Minor Changes
