@@ -537,6 +537,212 @@ class Request<
 
 ---
 
+## Result utilities
+
+`Result<T, E>` is a small tagged-union helper used throughout Aspi to represent success or failure without throwing.
+
+```ts
+type Ok<T> = { __tag: 'ok'; value: T };
+type Err<E> = { __tag: 'err'; error: E };
+type Result<T, E> = Ok<T> | Err<E>;
+```
+
+Creating Results
+```ts
+  import * as Result from './result';
+
+  const success = Result.ok(42);
+  const failure = Result.err('not found');
+```
+
+Checking and Extracting
+```ts
+if (Result.isOk(success)) {
+  console.log(success.value); // 42
+}
+
+if (Result.isErr(failure)) {
+  console.error(failure.error); // "not found"
+}
+
+const valueOrNull = Result.getOrNull(success); // 42 | null
+const errorOrNull = Result.getErrorOrNull(failure); // "not found" | null
+
+const valueOrFallback = Result.getOrElse(failure, 0); // 0
+
+// Throwing
+const mustHaveValue = Result.getOrThrow(success); // 42
+// Result.getOrThrow(failure) throws "not found"
+```
+
+Transforming
+```ts
+// map value
+const doubled = Result.map(success, (n) => n * 2); // ok(84)
+
+// map error
+const upperError = Result.mapErr(failure, (e) => e.toUpperCase()); // err("NOT FOUND")
+
+// pattern matching
+const message = Result.match(success, {
+  onOk: (n) => `Got ${n}`,
+  onErr: (e) => `Error: ${e}`,
+});
+// "Got 42"
+```
+
+Tagged error helpers
+When your error type is a union with a tag field, you can use helpers to handle specific variants:
+```ts
+type HttpError =
+  | { tag: 'BAD_REQUEST'; details?: string }
+  | { tag: 'UNAUTHORIZED' }
+  | { tag: 'NOT_FOUND' };
+
+const result: Result<number, HttpError> = Result.err({
+  tag: 'NOT_FOUND',
+});
+
+// Handle a specific tag
+Result.catchError(result, 'NOT_FOUND', (e) => {
+  console.log('Missing resource');
+});
+
+// Handle multiple tags
+Result.catchErrors(result, {
+  BAD_REQUEST: (e) => console.log('Invalid input'),
+  UNAUTHORIZED: () => console.log('Please log in'),
+});
+```
+
+Pipe Utility
+```ts
+import { pipe } from './result';
+
+const label = pipe(
+  12345,
+  (cents) => cents / 100,
+  (amount) => amount.toFixed(2),
+  (str) => `$${str}`,
+);
+// "$123.45"
+```
+
+---
+
+## Experimental capabilities
+
+> **Experimental:** This API is still evolving. Names and behavior may change in minor versions.
+
+Capabilities are small plugins that wrap the low‑level fetch call for each request. They let you implement cross‑cutting behavior (logging, retries, token refresh, tracing, etc.) without changing Aspi core.
+
+```ts
+import type { Capability } from './interceptor';
+import { Aspi } from './aspi';
+
+// Capability signature
+const myCapability: Capability = ({ request }) => ({
+  async run(runner) {
+    // Called before fetch
+    console.log('→', request.path);
+
+    const res = await runner(); // performs fetch(url, requestInit)
+
+    // Called after fetch
+    console.log('←', res.status, res.statusText);
+
+    return res;
+  },
+});
+```
+
+Registering capabilities
+Capabilities are attached at the Aspi client level and apply to all requests created from that instance:
+```ts
+const api = new Aspi({ baseUrl: 'https://api.example.com' })
+  .useCapability(myCapability);
+
+const user = await api.get('/users/1').throwable().json<User>();
+```
+
+You can register multiple capabilities; they execute in the order they were added, each wrapping the next:
+```ts
+const api = new Aspi({ baseUrl: 'https://api.example.com' })
+  .useCapability(loggingCapability)
+  .useCapability(tracingCapability)
+  .useCapability(refreshTokenCapability);
+```
+
+Example: token refresh (simplified)
+
+```ts
+import type { Capability } from './interceptor';
+import { Aspi } from './aspi';
+import * as Result from './result';
+
+let tokens: { accessToken: string | null; refreshToken: string | null } = {
+  accessToken: null,
+  refreshToken: null,
+};
+
+async function refreshTokenRequest(refreshToken: string) {
+  const res = await new Aspi({ baseUrl: 'https://auth.example.com' })
+    .post('/refresh')
+    .bodyJson({ refreshToken })
+    .withResult()
+    .json<{ accessToken: string; refreshToken: string }>();
+
+  await Result.match(res, {
+    onOk: ({ data }) => {
+      tokens = data;
+    },
+    onErr: (err) => {
+      tokens = { accessToken: null, refreshToken: null };
+      throw err;
+    },
+  });
+}
+
+export const refreshTokenCapability: Capability = ({ request }) => {
+  let isRefreshing = false;
+
+  return {
+    async run(runner) {
+      // First try
+      const first = await runner();
+
+      if (first.status !== 401) {
+        return first;
+      }
+
+      // No refresh token → just propagate 401
+      if (!tokens.refreshToken || isRefreshing) {
+        return first;
+      }
+
+      isRefreshing = true;
+      try {
+        await refreshTokenRequest(tokens.refreshToken);
+      } finally {
+        isRefreshing = false;
+      }
+
+      if (!tokens.accessToken) {
+        return first;
+      }
+
+      // Inject new Authorization header and retry once
+      request.requestInit.headers = {
+        ...request.requestInit.headers,
+        Authorization: `Bearer ${tokens.accessToken}`,
+      };
+
+      return runner();
+    },
+  };
+};
+```
+
 ## License
 
 MIT © Aspi contributors

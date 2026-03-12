@@ -22,6 +22,7 @@ import type {
 } from './types';
 import * as Result from './result';
 import type { StandardSchemaV1 } from './standard-schema';
+import type { Capability } from './capability';
 
 /**
  * A class for building and executing HTTP requests with customizable options and error handling.
@@ -61,11 +62,13 @@ export class Request<
   #shouldBeResult: boolean = false;
   #bodySchemaIssues: StandardSchemaV1.FailureResult['issues'] = [];
   #throwOnError: boolean = false;
+  #capabilities: Capability[] = [];
 
   constructor(
     method: HttpMethods,
     path: string,
     requestOptions: RequestOptions<TRequest>,
+    capabilities: Capability[] = [],
   ) {
     this.#path = path;
     this.#middlewares = requestOptions.middlewares || [];
@@ -77,6 +80,7 @@ export class Request<
     this.#customErrorCbs = { ...(requestOptions?.errorCbs || {}) };
     this.#throwOnError = requestOptions.throwOnError || false;
     this.#shouldBeResult = requestOptions.shouldBeResult || false;
+    this.#capabilities = [...capabilities];
   }
 
   /**
@@ -1110,7 +1114,15 @@ export class Request<
 
       while (attempts <= retries) {
         try {
-          response = await fetch(url, requestInit);
+          if (this.#capabilities.length > 0) {
+            for (const capability of this.#capabilities) {
+              response = await capability({ request }).run(() =>
+                fetch(url, requestInit),
+              );
+            }
+          } else {
+            response = await fetch(url, requestInit);
+          }
 
           responseData = await responseParser(response);
 
@@ -1433,5 +1445,51 @@ export class Request<
     const cfg = this.#sanitisedRetryConfig();
     // Return a shallow copy so callers cannot mutate private state.
     return { ...cfg };
+  }
+
+  /**
+   * Registers a capability for this request.
+   *
+   * A capability is a small wrapper around the underlying `fetch` call that can
+   * intercept, inspect, or modify the request/response lifecycle. Each registered
+   * capability receives the constructed {@link AspiRequest} and can wrap the
+   * execution of the network call via its `run` method.
+   *
+   * Capabilities are applied in the order they are registered. For each HTTP
+   * call, the `Request` will:
+   *
+   * 1. Build an {@link AspiRequest} from the current configuration.
+   * 2. Create a runner: `() => fetch(url, requestInit)`.
+   * 3. Pass that runner through each capability in sequence, allowing them to:
+   *    - log or trace requests,
+   *    - implement retry/refresh logic,
+   *    - short‑circuit with synthetic responses, etc.
+   *
+   * @param capability - The capability factory to register. It will be invoked
+   *   for every execution of this request with the current {@link AspiRequest}.
+   *
+   * @returns This {@link Request} instance, enabling fluent chaining.
+   *
+   * @example
+   * ```ts
+   * const api = new Aspi({ baseUrl: 'https://api.example.com' });
+   *
+   * const apiWithLogging = api.useCapability(({ request }) => ({
+   *   async run(runner) {
+   *     console.log('→', request.path, request.requestInit);
+   *     const res = await runner();
+   *     console.log('←', res.status, res.statusText);
+   *     return res;
+   *   },
+   * }));
+   *
+   * const result = await apiWithLogging
+   *   .get('/users')
+   *   .withResult()
+   *   .json();
+   * ```
+   */
+  useCapability(capability: Capability<TRequest>) {
+    return this.#capabilities.push(capability);
   }
 }

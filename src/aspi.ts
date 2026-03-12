@@ -1,5 +1,6 @@
 import type { CustomError } from './error';
 import { httpErrors, type HttpErrorStatus, type HttpMethods } from './http';
+import type { Capability } from './capability';
 import { Request } from './request';
 import type {
   AspiRequestInit,
@@ -37,6 +38,7 @@ export class Aspi<
   #customErrorCbs: ErrorCallbacks = {};
   #throwOnError = false;
   #shouldBeResult = false;
+  #capabilities: Capability[] = [];
 
   constructor(config: AspiRequestInitWithoutBodyAndMethod) {
     const { retryConfig, ...requestInit } = config;
@@ -83,17 +85,22 @@ export class Aspi<
   }
 
   #createRequest<M extends HttpMethods>(method: M, path: string) {
-    return new Request<M, TRequest, Opts>(method, path, {
-      requestConfig: {
-        ...this.#globalRequestInit,
-        method,
+    return new Request<M, TRequest, Opts>(
+      method,
+      path,
+      {
+        requestConfig: {
+          ...this.#globalRequestInit,
+          method,
+        },
+        middlewares: this.#middlewares,
+        errorCbs: this.#customErrorCbs,
+        throwOnError: this.#throwOnError,
+        shouldBeResult: this.#shouldBeResult,
+        retryConfig: this.#retryConfig,
       },
-      middlewares: this.#middlewares,
-      errorCbs: this.#customErrorCbs,
-      throwOnError: this.#throwOnError,
-      shouldBeResult: this.#shouldBeResult,
-      retryConfig: this.#retryConfig,
-    });
+      this.#capabilities,
+    );
   }
 
   /**
@@ -445,5 +452,47 @@ export class Aspi<
         }
       >
     >;
+  }
+
+  /**
+   * Registers a capability on this {@link Aspi} instance.
+   *
+   * A capability is a small, pluggable unit that can intercept and wrap the
+   * low‑level `fetch` call used by all requests created from this client.
+   * It is invoked for every request with the constructed {@link AspiRequest},
+   * and can:
+   *
+   * - inspect or mutate the outgoing request (e.g. inject auth headers),
+   * - inspect the raw {@link Response},
+   * - implement cross‑cutting concerns such as logging, tracing, retries,
+   *   or token refresh, and
+   * - short‑circuit the network call by returning a synthetic {@link Response}.
+   *
+   * Capabilities registered on the {@link Aspi} instance are propagated to every
+   * {@link Request} created via methods like {@link get}, {@link post}, etc.
+   * They are applied in the order they are registered.
+   *
+   * @param capability - The capability factory to install on this client.
+   *
+   * @returns This {@link Aspi} instance for fluent chaining.
+   *
+   * @example
+   * ```ts
+   * const api = new Aspi({ baseUrl: 'https://api.example.com' })
+   *   .useCapability(({ request }) => ({
+   *     async run(runner) {
+   *       console.log('→', request.path);
+   *       const res = await runner();
+   *       console.log('←', res.status);
+   *       return res;
+   *     },
+   *   }));
+   *
+   * const user = await api.get('/users/1').throwable().json<User>();
+   * ```
+   */
+  useCapability(capability: Capability<TRequest>) {
+    this.#capabilities.push(capability);
+    return this;
   }
 }
