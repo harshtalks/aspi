@@ -14,7 +14,7 @@ export type CapabilityArgs<T extends AspiRequestInit = AspiRequestInit> = {
    * - mutate `request.requestInit.headers`, `signal`, or other properties
    *   before the network call is made.
    */
-  request: AspiRequest<AspiRequestInit>;
+  request: AspiRequest<T>;
 };
 
 /**

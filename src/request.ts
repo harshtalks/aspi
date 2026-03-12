@@ -62,13 +62,13 @@ export class Request<
   #shouldBeResult: boolean = false;
   #bodySchemaIssues: StandardSchemaV1.FailureResult['issues'] = [];
   #throwOnError: boolean = false;
-  #capabilities: Capability[] = [];
+  #capabilities: Capability<TRequest>[] = [];
 
   constructor(
     method: HttpMethods,
     path: string,
     requestOptions: RequestOptions<TRequest>,
-    capabilities: Capability[] = [],
+    capabilities: Capability<TRequest>[] = [],
   ) {
     this.#path = path;
     this.#middlewares = requestOptions.middlewares || [];

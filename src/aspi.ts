@@ -38,7 +38,7 @@ export class Aspi<
   #customErrorCbs: ErrorCallbacks = {};
   #throwOnError = false;
   #shouldBeResult = false;
-  #capabilities: Capability[] = [];
+  #capabilities: Capability<TRequest>[] = [];
 
   constructor(config: AspiRequestInitWithoutBodyAndMethod) {
     const { retryConfig, ...requestInit } = config;
