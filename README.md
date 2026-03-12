@@ -189,15 +189,15 @@ try {
 // Result mode wins (throwable is ignored)
 const result = await api
   .post('/login')
-  .withResult() // enables Result mode
-  .throwable() // ignored because withResult was called later
+  .withResult() // ignored because throwable was called later
+  .throwable() // enables throwable mode
   .json<{ token: string }>();
 
 // Throwable mode wins (Result is ignored)
 const data = await api
   .get('/profile')
-  .throwable() // enables throwable mode
-  .withResult() // ignored because throwable was called later
+  .throwable() // ignored because withResult was called later
+  .withResult() // enables Result mode
   .json();
 ```
 
