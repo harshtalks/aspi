@@ -1,35 +1,38 @@
-# Aspi
+# aspi
 
-A tiny, type‑safe wrapper around the native **fetch** API that gives you a clean, monadic interface for HTTP requests.
-It ships with **zero runtime dependencies**, a **tiny bundle size**, and full **TypeScript** support out of the box.
+[![Bundle Size](https://img.shields.io/bundlephobia/minzip/aspi)](https://bundlephobia.com/package/aspi)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-**Why use Aspi?**
+A tiny, type-safe HTTP client for TypeScript built on native `fetch`.
 
-- End‑to‑end TypeScript typings (request + response)
-- No extra weight – only a thin wrapper around `fetch`
-- Chain‑of‑responsibility middleware support via `use`
-- Result‑based error handling (values as errors)
-- Built‑in retry, header helpers, query‑string handling, and schema validation (Zod, Arktype, Valibot)
-- Flexible error mapping with `error` and convenience shortcuts
+Zero runtime dependencies. Three response modes. Full error-union types.
+
+---
+
+## Features
+
+- **Zero dependencies** — thin wrapper around the platform `fetch` API
+- **Three response modes** — tuple `[data, error]`, `Result` monad, or `throwable` (your choice per call)
+- **Typed error unions** — every error variant is tagged and narrowable at compile time
+- **Custom error mapping** — map any HTTP status code to a structured, typed error object
+- **Retry with back-off** — fixed or dynamic delay, status-code filtering, custom predicates
+- **Schema validation** — validate request bodies and responses via any [StandardSchemaV1](https://github.com/standard-schema/standard-schema) library (Zod, Valibot, Arktype, …)
+- **Middleware** — transform the `RequestInit` for every request via `use()`
+- **Capabilities** — plugin-level interception of the raw `fetch` call (logging, token refresh, tracing)
 
 ---
 
 ## Installation
 
-npm
-`bash
-    npm install aspi
-    `
+```bash
+npm install aspi
+# or
+yarn add aspi
+# or
+pnpm add aspi
+```
 
-yarn
-`bash
-    yarn add aspi
-    `
-
-pnpm
-`bash
-    pnpm add aspi
-    `
+TypeScript 5+ is required as a peer dependency.
 
 ---
 
@@ -38,719 +41,529 @@ pnpm
 ```ts
 import { Aspi, Result } from 'aspi';
 
-// Create a client with a base URL and default headers
-const api = new Aspi({
-  baseUrl: 'https://api.example.com',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Simple GET request – returns a tuple [value, error]
-async function getTodo(id: number) {
-  const [value, error] = await api
-    .get(`/todos/${id}`)
-    .setQueryParams({ include: 'details' }) // optional query string
-    .notFound(() => ({ message: 'Todo not found' }))
-    .json<{ id: number; title: string; completed: boolean }>();
-
-  if (value) console.log('Todo:', value);
-  if (error) {
-    if (error.tag === 'aspiError') console.error(error.response.status);
-    if (error.tag === 'notFoundError') console.warn(error.data.message);
-    if (error.tag === 'jsonParseError') console.error(error.data.message);
-  }
-}
-
-getTodo(1);
-```
-
----
-
-## Why Aspi?
-
-Most real‑world codebases end up with one or more of these issues:
-
-1. **Inconsistent error handling**
-   - Some utilities throw raw `Error`/`AxiosError`.
-   - Others return `{ ok: false, error }` or `null` or a custom union.
-   - Callers don’t know whether to use `try/catch`, check `ok`, or both.
-
-2. **Retry logic duplicated everywhere**
-   - Each service rolls its own `while (attempt <= retries)` loop.
-   - Status codes, backoff strategies, and retry limits slowly diverge over time.
-   - There is no single place to see “how do we retry HTTP calls in this app?”.
-
-3. **Validation pushed far from the network boundary**
-   - Request payloads are sometimes validated, sometimes not.
-   - Response validation happens deep in the business logic (if at all).
-   - JSON parse errors leak as raw `SyntaxError`, not structured errors.
-
-4. **Configuration scattered across factories and interceptors**
-   - Base URL helpers, auth decorators, error mappers, retry plugins, and logging interceptors all live in different files.
-   - Global state / interceptors can make it hard to tell what a given request will actually do.
-
-5. **Type systems are bolted on, not designed in**
-   - Generic HTTP clients often expose `any` for responses.
-   - Error flows are not encoded in the type system, forcing manual guards and casting.
-
-## How Aspi fixes them
-
-Aspi’s design centers around three things:
-
-1. **Mode‑driven responses**
-
-   You decide at call‑site how you want to consume responses:
-   - `withResult()` → `json/text/blob` return a `Result.Result<Ok, ErrorUnion>`.
-   - `throwable()` → `json/text/blob` return `AspiPlainResponse` and throw on failure.
-   - Default → `json/text/blob` return `[ok, err]` tuples.
-
-   All error variants are **tagged** so they can be safely narrowed by `error.tag`.
-
-2. **Centralized, configurable retry layer**
-
-   Retry behavior is described declaratively:
-   - `retries`: max attempts.
-   - `retryDelay`: number or function `(attempt, maxAttempts, request, response) => delayMs`.
-   - `retryOn`: list of HTTP status codes that should trigger a retry.
-   - `retryWhile`: predicate `(request, response) => boolean` for custom retry conditions.
-   - `onRetry`: hook invoked after each retry attempt.
-
-   This configuration can be applied globally (`Aspi.setRetry`) and overridden per request (`Request.setRetry`).
-
-3. **Validation at the transport boundary**
-
-   Using a `StandardSchemaV1` interface, Aspi integrates with schema libraries (e.g. Zod, Valibot) to:
-   - Validate request bodies with `bodySchema` + `bodyJson` **before** the network call.
-   - Validate responses with `schema()` + `json()` **after** JSON parsing.
-
-   These failures appear as tagged `parseError` values with structured issue lists, not random runtime exceptions.
-
----
-
-## Using the `Result` monad
-
-If you prefer a single `Result` value instead of a tuple, call **`.withResult()`** before a body‑parser method.
-
-```ts
-async function getTodoResult(id: number) {
-  const response = await api
-    .get(`/todos/${id}`)
-    .notFound(() => ({ message: 'Todo not found' }))
-    .withResult() // enable Result mode
-    .json<{ id: number; title: string; completed: boolean }>();
-
-  Result.match(response, {
-    onOk: (data) => console.log('✅', data),
-    onErr: (err) => {
-      if (err.tag === 'aspiError') console.error(err.response.status);
-      if (err.tag === 'notFoundError') console.warn(err.data.message);
-    },
-  });
-}
-```
-
----
-
-## Throwable
-
-The `throwable()` toggle makes a request **throw** on any non‑2xx HTTP response, allowing you to use the familiar `try / catch` pattern instead of dealing with tuples or `Result` objects.
-
-When a request is in _throwable_ mode, the body‑parser methods (`json()`, `text()`, `blob()`) resolve with the parsed value directly. If the response status indicates an error, the promise is rejected with a typed Aspi error (e.g., `aspiError`, `unauthorisedError`, `jsonParseError`, …).
-
-#### Basic usage
-
-```ts
-// Using throwable with async/await + try/catch
-try {
-  const todo = await api
-    .get('/todos/1')
-    .throwable() // <─ enable throwable mode
-    .json<{ id: number; title: string; completed: boolean }>(); // returns the parsed JSON
-
-  console.log('✅ Todo:', todo);
-} catch (err) {
-  // `err` is a typed Aspi error
-  if (err.tag === 'aspiError') {
-    console.error('HTTP error:', err.response.status);
-  } else if (err.tag === 'jsonParseError') {
-    console.error('Invalid JSON:', err.data.message);
-  } else {
-    console.error('Unexpected error:', err);
-  }
-}
-```
-
-#### Interaction with `withResult()`
-
-`throwable()` and `withResult()` are _mutually exclusive_ – the last toggle applied wins.
-
-```ts
-// Result mode wins (throwable is ignored)
-const result = await api
-  .post('/login')
-  .withResult() // ignored because throwable was called later
-  .throwable() // enables throwable mode
-  .json<{ token: string }>();
-
-// Throwable mode wins (Result is ignored)
-const data = await api
-  .get('/profile')
-  .throwable() // ignored because withResult was called later
-  .withResult() // enables Result mode
-  .json();
-```
-
-#### When to use `throwable()`
-
-- You prefer native `try / catch` flow over tuple/result handling.
-- You want the request to **reject** automatically on HTTP errors, keeping the success path clean.
-- You are integrating Aspi into existing codebases that already rely on exception handling.
-
-`throwable()` gives you the flexibility to choose the error‑handling style that best fits your project.
-
-## Schema validation (Zod example)
-
-```ts
-import { z } from 'zod';
-import { Aspi, Result } from 'aspi';
-
 const api = new Aspi({
   baseUrl: 'https://jsonplaceholder.typicode.com',
   headers: { 'Content-Type': 'application/json' },
 });
 
-async function getValidatedTodo(id: number) {
-  const response = await api
-    .get(`/todos/${id}`)
-    .withResult()
-    .schema(
-      z.object({
-        id: z.number(),
-        title: z.string(),
-        completed: z.boolean(),
-      }),
-    )
-    .json(); // type inferred from the schema
+// Tuple mode — default
+const [data, error] = await api
+  .get('/todos/1')
+  .notFound(() => ({ message: 'Todo not found' }))
+  .json<{ id: number; title: string; completed: boolean }>();
 
-  Result.match(response, {
-    onOk: (data) => console.log('Todo ✅', data),
-    onErr: (err) => {
-      if (err.tag === 'parseError') {
-        const parseErr = err.data as z.ZodError;
-        console.error('Validation failed:', parseErr.errors);
-      } else {
-        console.error('Other error', err);
-      }
-    },
+if (error) {
+  if (error.tag === 'aspiError')    console.error(error.response.status);
+  if (error.tag === 'notFoundError') console.warn(error.data.message);
+  if (error.tag === 'jsonParseError') console.error(error.data.message);
+}
+
+if (data) console.log(data.title);
+```
+
+---
+
+## Response modes
+
+Every request can be consumed in one of three modes. Switch mode by calling `.withResult()` or `.throwable()` before the body-parser method.
+
+### 1. Tuple mode (default)
+
+Returns `[AspiResultOk | null, ErrorUnion | null]`. Familiar to anyone who has used Go-style error handling.
+
+```ts
+const [data, error] = await api.get('/users/1').json<User>();
+
+if (error) { /* handle */ }
+console.log(data!.name);
+```
+
+### 2. Result mode
+
+Returns a `Result<Ok, ErrorUnion>` tagged union. Use `.withResult()` to enable.
+
+```ts
+const result = await api
+  .get('/users/1')
+  .withResult()
+  .json<User>();
+
+Result.match(result, {
+  onOk: ({ data }) => console.log(data.name),
+  onErr: (err)  => console.error(err.tag, err),
+});
+```
+
+### 3. Throwable mode
+
+Returns the parsed value directly and throws a typed error on any non-2xx response. Use `.throwable()` to enable.
+
+```ts
+try {
+  const { data } = await api.get('/users/1').throwable().json<User>();
+  console.log(data.name);
+} catch (err) {
+  if (err.tag === 'aspiError') console.error(err.response.status);
+}
+```
+
+> `throwable()` and `withResult()` are mutually exclusive — the **last one called wins**.
+
+---
+
+## Error handling
+
+### Built-in error variants
+
+Every response mode surfaces the same tagged error variants:
+
+| Tag | When |
+|---|---|
+| `aspiError` | Any non-2xx response with no matching custom handler |
+| `jsonParseError` | Response body could not be parsed as JSON |
+| `parseError` | Response failed schema validation (when `.schema()` is used) |
+| *custom* | Any tag you define via `.error()` or a convenience shortcut |
+
+### Custom error mapping
+
+Map an HTTP status to a typed, tagged error object. The callback receives the full request and response.
+
+```ts
+const [data, error] = await api
+  .post('/login')
+  .bodyJson({ email, password })
+  .error('rateLimitedError', 'TOO_MANY_REQUESTS', ({ response }) => ({
+    retryAfter: response.response.headers.get('Retry-After'),
+  }))
+  .json<{ token: string }>();
+
+if (error?.tag === 'rateLimitedError') {
+  console.warn('Retry after', error.data.retryAfter, 'seconds');
+}
+```
+
+### Convenience shortcuts
+
+Pre-built shortcuts for the most common statuses. Each produces a typed error with a predictable tag.
+
+| Method | Status | Error tag |
+|---|---|---|
+| `.notFound(cb)` | 404 | `notFoundError` |
+| `.badRequest(cb)` | 400 | `badRequestError` |
+| `.unauthorized(cb)` | 401 | `unauthorizedError` |
+| `.forbidden(cb)` | 403 | `forbiddenError` |
+| `.conflict(cb)` | 409 | `conflictError` |
+| `.tooManyRequests(cb)` | 429 | `tooManyRequestsError` |
+| `.notImplemented(cb)` | 501 | `notImplementedError` |
+| `.internalServerError(cb)` | 500 | `internalServerError` |
+
+> Note: When calling these on the `Request` object (e.g. `api.get('/…').unauthorised(…)`) the method is spelled `.unauthorised()` (British) and produces an `unauthorisedError` tag. On the `Aspi` instance itself the method is `.unauthorized()` (American). All other shortcuts are spelled identically on both.
+
+```ts
+const [data, error] = await api
+  .get('/account')
+  .notFound(() => ({ message: 'Account does not exist' }))
+  .unauthorized(() => ({ message: 'Please sign in' }))
+  .json<Account>();
+
+if (error?.tag === 'notFoundError') redirect('/signup');
+if (error?.tag === 'unauthorizedError') redirect('/login');
+```
+
+### Inspecting `AspiError`
+
+The base `aspiError` variant exposes the full request and response, plus an `.ifMatch()` helper for conditional handling.
+
+```ts
+if (error?.tag === 'aspiError') {
+  console.log(error.response.status);       // numeric HTTP status code
+  console.log(error.response.statusLabel);  // e.g. "NOT_FOUND"
+  console.log(error.response.statusText);   // raw status text
+  console.log(error.request.path);          // request path
+
+  // Run a callback only for a specific status
+  error.ifMatch('INTERNAL_SERVER_ERROR', ({ response }) => {
+    reportToSentry(response);
   });
 }
 ```
 
 ---
 
-## Retry & back‑off
+## Making requests
+
+### HTTP methods
+
+```ts
+api.get('/users')
+api.post('/users')
+api.put('/users/1')
+api.patch('/users/1')
+api.delete('/users/1')
+api.head('/users')
+api.options('/users')
+```
+
+### Request body
+
+Use `.bodyJson()` to send a JSON payload. Pair it with `.bodySchema()` to validate the body before the network call.
+
+```ts
+// Plain JSON body
+const [data, error] = await api
+  .post('/users')
+  .bodyJson({ name: 'Alice', email: 'alice@example.com' })
+  .json<User>();
+
+// Validated body (Zod example)
+import { z } from 'zod';
+
+const CreateUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+const [data, error] = await api
+  .post('/users')
+  .bodySchema(CreateUserSchema)   // validate before sending
+  .bodyJson({ name: 'Alice', email: 'alice@example.com' })
+  .json<User>();
+
+// If bodyJson fails validation, error.tag === 'parseError'
+```
+
+### Query parameters
+
+`.setQueryParams()` accepts an object, `URLSearchParams`, an array of tuples, or a raw string.
+
+```ts
+// Object — most common
+api.get('/todos').setQueryParams({ page: '2', limit: '20' }).json();
+
+// URLSearchParams
+api.get('/todos').setQueryParams(new URLSearchParams({ q: 'typescript' })).json();
+
+// Check the resolved URL before sending
+console.log(api.get('/todos').setQueryParams({ page: '2' }).url());
+// → https://api.example.com/todos?page=2
+```
+
+### Headers
+
+```ts
+// Single header
+api.get('/data').setHeader('X-Request-ID', crypto.randomUUID());
+
+// Multiple headers
+api.get('/data').setHeaders({ Accept: 'application/json', 'X-Version': '2' });
+
+// Bearer token shortcut
+api.get('/me').setBearer(accessToken);
+```
+
+---
+
+## Retry
+
+Configure retry behavior globally on the `Aspi` instance, then override per request as needed.
 
 ```ts
 const api = new Aspi({
-  baseUrl: 'https://example.com',
+  baseUrl: 'https://api.example.com',
   headers: { 'Content-Type': 'application/json' },
 }).setRetry({
   retries: 3,
-  retryDelay: 1000, // simple fixed delay
-  retryOn: [404, 500], // retry on specific status codes
+  retryDelay: 500,          // fixed 500 ms between attempts
+  retryOn: [429, 500, 502, 503, 504],
 });
 
-// Override retry options for a single request
-api
-  .get('/todos/1')
-  .setHeader('Accept', 'application/json')
+// Override for a single request — exponential back-off
+const [data, error] = await api
+  .get('/reports/heavy')
   .setRetry({
-    // exponential back‑off for this call only
-    retryDelay: (attempt) => Math.pow(2, attempt) * 1000,
+    retryDelay: (remaining, total) => Math.pow(2, total - remaining) * 200,
+    retryWhile: (_req, res) => res.status >= 500,
+    onRetry: (_req, res) => console.warn('Retrying after', res.status),
   })
   .withResult()
-  .json()
-  .then((res) =>
-    Result.match(res, {
-      onOk: (data) => console.log('Got data', data),
-      onErr: (err) => console.error('Failed', err),
-    }),
-  );
+  .json<Report>();
 ```
+
+### Retry config options
+
+| Option | Type | Description |
+|---|---|---|
+| `retries` | `number` | Maximum number of retry attempts |
+| `retryDelay` | `number \| (remaining, total, request, response) => number` | Delay in ms, or a function returning one |
+| `retryOn` | `number[]` | HTTP status codes that should trigger a retry |
+| `retryWhile` | `(request, response) => boolean` | Custom predicate — return `true` to retry |
+| `onRetry` | `(request, response) => void` | Hook called after each failed attempt |
 
 ---
 
-## Global configuration helpers
+## Schema validation
 
-| Method                   | Description                                                                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setBaseUrl(url)`        | Change the base URL for all subsequent requests.                                                                                                                          |
-| `setHeaders(headers)`    | Merge an object of headers with any existing ones.                                                                                                                        |
-| `setHeader(key, value)`  | Set a single header.                                                                                                                                                      |
-| `setBearer(token)`       | Shortcut for `Authorization: Bearer <token>`.                                                                                                                             |
-| `setRetry(retryConfig)`  | Define a global retry strategy (overridable per request).                                                                                                                 |
-| `setQueryParams(params)` | Replace the request’s query string – accepts object, `URLSearchParams`, array of tuples, or raw string.                                                                   |
-| `schema(schema)`         | Attach a `StandardSchemaV1` validator for the response body.                                                                                                              |
-| `use(fn)`                | Register a request‑transformer middleware that receives the current `RequestInit` and returns a new one. Returns a new `Aspi` instance typed with the transformed config. |
-| `withResult()`           | Switch the request into Result mode (returns a `Result` instead of a tuple).                                                                                              |
-| `throwable()`            | Make the request throw on non‑2xx responses (useful for `try / catch` patterns).                                                                                          |
-| `url()`                  | Get the fully‑qualified URL that will be used for the request.                                                                                                            |
+Aspi integrates with any library that implements the [StandardSchemaV1](https://github.com/standard-schema/standard-schema) interface, including **Zod**, **Valibot**, and **Arktype**.
 
----
-
-## Custom error handling
-
-Aspi lets you map **any HTTP status** to a typed error object that can be pattern‑matched later.
+Attach a schema with `.schema()` before the body-parser. The inferred output type is used automatically — you don't need to pass a generic.
 
 ```ts
-api
-  .error('badRequestError', 'BAD_REQUEST', (req, res) => ({
-    message: 'The request payload is invalid',
-    payload: res.body,
-  }))
-  .error('unauthorisedError', 'UNAUTHORIZED', () => ({
-    message: 'You must log in first',
-  }));
-```
+import { z } from 'zod';
 
-Convenient shortcuts are provided for the most common statuses (each forwards to `error` internally and augments the generic `Opts['error']` type):
+const TodoSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  completed: z.boolean(),
+});
 
-```ts
-api.notFound(cb); // 404
-api.tooManyRequests(cb); // 429
-api.conflict(cb); // 409
-api.badRequest(cb); // 400
-api.unauthorised(cb); // 401 (British spelling, matches the Request API)
-api.forbidden(cb); // 403
-api.notImplemented(cb); // 501
-api.internalServerError(cb); // 500
-```
-
-These helpers allow you to write:
-
-```ts
-api
-  .get('/secret')
-  .unauthorised(() => ({ message: 'You need a token' }))
+const result = await api
+  .get('/todos/1')
   .withResult()
-  .json()
-  .then((res) =>
-    Result.match(res, {
-      onOk: (data) => console.log(data),
-      onErr: (err) => {
-        if (err.tag === 'unauthorisedError') {
-          console.warn(err.data.message);
-        }
-      },
-    }),
-  );
-```
+  .schema(TodoSchema)
+  .json(); // return type is inferred from the schema
 
----
-
-## API reference (selected)
-
-```ts
-class Request<
-  Method extends HttpMethods,
-  TRequest extends AspiRequestInitWithBody = AspiRequestInit,
-  Opts extends Record<any, any> = { error: {} },
-> {
-  // core request factories
-  get(path: string): Request<'GET', TRequest, Opts>;
-  post(path: string): Request<'POST', TRequest, Opts>;
-  put(path: string): Request<'PUT', TRequest, Opts>;
-  patch(path: string): Request<'PATCH', TRequest, Opts>;
-  delete(path: string): Request<'DELETE', TRequest, Opts>;
-  head(path: string): Request<'HEAD', TRequest, Opts>;
-  options(path: string): Request<'OPTIONS', TRequest, Opts>;
-
-  // configuration
-  setBaseUrl(url: BaseURL): this;
-  setHeaders(headers: HeadersInit): this;
-  setHeader(key: string, value: string): this;
-  setBearer(token: string): this;
-  setRetry(cfg: AspiRetryConfig<TRequest>): this;
-  setQueryParams(
-    params: Record<string, string> | string[][] | string | URLSearchParams,
-  ): this;
-  use<T extends TRequest, U extends TRequest>(
-    fn: RequestTransformer<T, U>,
-  ): Request<U>;
-
-  // schema validation
-  schema<TSchema extends StandardSchemaV1>(
-    schema: TSchema,
-  ): Request<
-    Method,
-    TRequest,
-    Merge<
-      Omit<Opts, 'schema'>,
-      {
-        schema: TSchema;
-        error: Merge<
-          Opts['error'],
-          {
-            parseError: CustomError<
-              'parseError',
-              StandardSchemaV1.FailureResult['issues']
-            >;
-          }
-        >;
-      }
-    >
-  >;
-
-  // result / throwable toggles
-  withResult(): Request<
-    Method,
-    TRequest,
-    Merge<
-      Omit<Opts, 'withResult' | 'throwable'>,
-      {
-        withResult: true;
-        throwable: false;
-      }
-    >
-  >;
-  throwable(): Request<
-    Method,
-    TRequest,
-    Merge<
-      Omit<Opts, 'withResult' | 'throwable'>,
-      {
-        withResult: false;
-        throwable: true;
-      }
-    >
-  >;
-
-  // custom error handling
-  error<Tag extends string, A extends {}>(
-    tag: Tag,
-    status: HttpErrorStatus,
-    cb: CustomErrorCb<TRequest, A>,
-  ): Request<
-    Method,
-    TRequest,
-    Merge<
-      Omit<Opts, 'error'>,
-      {
-        error: {
-          [K in Tag | keyof Opts['error']]: K extends Tag
-            ? CustomError<Tag, A>
-            : Opts['error'][K];
-        };
-      }
-    >
-  >;
-  notFound<A>(cb: CustomErrorCb<TRequest, A>): this;
-  tooManyRequests<A>(cb: CustomErrorCb<TRequest, A>): this;
-  conflict<A>(cb: CustomErrorCb<TRequest, A>): this;
-  badRequest<A>(cb: CustomErrorCb<TRequest, A>): this;
-  unauthorised<A>(cb: CustomErrorCb<TRequest, A>): this;
-  forbidden<A>(cb: CustomErrorCb<TRequest, A>): this;
-  notImplemented<A>(cb: CustomErrorCb<TRequest, A>): this;
-  internalServerError<A>(cb: CustomErrorCb<TRequest, A>): this;
-
-  // helpers
-  url(): string;
-
-  // response parsers
-  json<T extends StandardSchemaV1.InferOutput<Opts['schema']>>(): Promise<
-    Opts['withResult'] extends true
-      ? Result.Result<
-          AspiResultOk<TRequest, T>,
-          | AspiError<TRequest>
-          | (Opts extends { error: any }
-              ? Opts['error'][keyof Opts['error']]
-              : never)
-          | JSONParseError
-        >
-      : Opts['throwable'] extends true
-        ? AspiPlainResponse<TRequest, T>
-        : [
-            AspiResultOk<TRequest, T> | null,
-            (
-              | (
-                  | AspiError<TRequest>
-                  | (Opts extends { error: any }
-                      ? Opts['error'][keyof Opts['error']]
-                      : never)
-                  | JSONParseError
-                )
-              | null
-            ),
-          ]
-  >;
-  text(): Promise<
-    Opts['withResult'] extends true
-      ? Result.Result<
-          AspiResultOk<TRequest, string>,
-          | AspiError<TRequest>
-          | (Opts extends { error: any }
-              ? Opts['error'][keyof Opts['error']]
-              : never)
-        >
-      : Opts['throwable'] extends true
-        ? AspiPlainResponse<TRequest, string>
-        : [
-            AspiResultOk<TRequest, string> | null,
-            (
-              | (
-                  | AspiError<TRequest>
-                  | (Opts extends { error: any }
-                      ? Opts['error'][keyof Opts['error']]
-                      : never)
-                )
-              | null
-            ),
-          ]
-  >;
-  blob(): Promise<
-    Opts['withResult'] extends true
-      ? Result.Result<
-          AspiResultOk<TRequest, Blob>,
-          | AspiError<TRequest>
-          | (Opts extends { error: any }
-              ? Opts['error'][keyof Opts['error']]
-              : never)
-        >
-      : Opts['throwable'] extends true
-        ? AspiPlainResponse<TRequest, Blob>
-        : [
-            AspiResultOk<TRequest, Blob> | null,
-            (
-              | (
-                  | AspiError<TRequest>
-                  | (Opts extends { error: any }
-                      ? Opts['error'][keyof Opts['error']]
-                      : never)
-                )
-              | null
-            ),
-          ]
-  >;
-}
-```
-
----
-
-## Result utilities
-
-`Result<T, E>` is a small tagged-union helper used throughout Aspi to represent success or failure without throwing.
-
-```ts
-type Ok<T> = { __tag: 'ok'; value: T };
-type Err<E> = { __tag: 'err'; error: E };
-type Result<T, E> = Ok<T> | Err<E>;
-```
-
-Creating Results
-
-```ts
-import * as Result from './result';
-
-const success = Result.ok(42);
-const failure = Result.err('not found');
-```
-
-Checking and Extracting
-
-```ts
-if (Result.isOk(success)) {
-  console.log(success.value); // 42
-}
-
-if (Result.isErr(failure)) {
-  console.error(failure.error); // "not found"
-}
-
-const valueOrNull = Result.getOrNull(success); // 42 | null
-const errorOrNull = Result.getErrorOrNull(failure); // "not found" | null
-
-const valueOrFallback = Result.getOrElse(failure, 0); // 0
-
-// Throwing
-const mustHaveValue = Result.getOrThrow(success); // 42
-// Result.getOrThrow(failure) throws "not found"
-```
-
-Transforming
-
-```ts
-// map value
-const doubled = Result.map(success, (n) => n * 2); // ok(84)
-
-// map error
-const upperError = Result.mapErr(failure, (e) => e.toUpperCase()); // err("NOT FOUND")
-
-// pattern matching
-const message = Result.match(success, {
-  onOk: (n) => `Got ${n}`,
-  onErr: (e) => `Error: ${e}`,
-});
-// "Got 42"
-```
-
-Tagged error helpers
-When your error type is a union with a tag field, you can use helpers to handle specific variants:
-
-```ts
-type HttpError =
-  | { tag: 'BAD_REQUEST'; details?: string }
-  | { tag: 'UNAUTHORIZED' }
-  | { tag: 'NOT_FOUND' };
-
-const result: Result<number, HttpError> = Result.err({
-  tag: 'NOT_FOUND',
-});
-
-// Handle a specific tag
-Result.catchError(result, 'NOT_FOUND', (e) => {
-  console.log('Missing resource');
-});
-
-// Handle multiple tags
-Result.catchErrors(result, {
-  BAD_REQUEST: (e) => console.log('Invalid input'),
-  UNAUTHORIZED: () => console.log('Please log in'),
-});
-```
-
-Pipe Utility
-
-```ts
-import { pipe } from './result';
-
-const label = pipe(
-  12345,
-  (cents) => cents / 100,
-  (amount) => amount.toFixed(2),
-  (str) => `$${str}`,
-);
-// "$123.45"
-```
-
----
-
-## Experimental capabilities
-
-> **Experimental:** This API is still evolving. Names and behavior may change in minor versions.
-
-Capabilities are small plugins that wrap the low‑level fetch call for each request. They let you implement cross‑cutting behavior (logging, retries, token refresh, tracing, etc.) without changing Aspi core.
-
-```ts
-import type { Capability } from './interceptor';
-import { Aspi } from './aspi';
-
-// Capability signature
-const myCapability: Capability = ({ request }) => ({
-  async run(runner) {
-    // Called before fetch
-    console.log('→', request.path);
-
-    const res = await runner(); // performs fetch(url, requestInit)
-
-    // Called after fetch
-    console.log('←', res.status, res.statusText);
-
-    return res;
+Result.match(result, {
+  onOk: ({ data }) => console.log(data.title),   // data: { id: number; title: string; completed: boolean }
+  onErr: (err) => {
+    if (err.tag === 'parseError') {
+      console.error('Validation failed:', err.data); // StandardSchemaV1 issue list
+    }
   },
 });
 ```
 
-Registering capabilities
-Capabilities are attached at the Aspi client level and apply to all requests created from that instance:
+---
+
+## Middleware
+
+`.use()` registers a request transformer that runs for every request created from the instance. It returns a **new `Aspi` instance** typed with the transformed request shape.
 
 ```ts
-const api = new Aspi({ baseUrl: 'https://api.example.com' }).useCapability(
-  myCapability,
-);
+// Add a correlation ID to every outgoing request
+const api = new Aspi({ baseUrl: 'https://api.example.com' })
+  .use((req) => ({
+    ...req,
+    headers: {
+      ...req.headers,
+      'X-Correlation-ID': crypto.randomUUID(),
+    },
+  }));
 
-const user = await api.get('/users/1').throwable().json<User>();
+// Chain multiple transformers
+const authedApi = api.use((req) => ({
+  ...req,
+  headers: { ...req.headers, Authorization: `Bearer ${getToken()}` },
+}));
 ```
 
-You can register multiple capabilities; they execute in the order they were added, each wrapping the next:
+---
+
+## Capabilities
+
+> **Experimental** — names and behavior may change in minor versions.
+
+Capabilities are plugins that wrap the low-level `fetch` call. Unlike middleware (which transforms the `RequestInit`), capabilities can inspect the raw `Response`, call `runner()` multiple times, or return a synthetic response entirely.
+
+```ts
+import type { Capability } from 'aspi';
+
+const loggingCapability: Capability = ({ request }) => ({
+  async run(runner) {
+    console.log('→', request.requestInit.method, request.path);
+    const res = await runner();
+    console.log('←', res.status, res.statusText);
+    return res;
+  },
+});
+
+const api = new Aspi({ baseUrl: 'https://api.example.com' })
+  .useCapability(loggingCapability);
+```
+
+Capabilities are composed in registration order, each wrapping the next.
 
 ```ts
 const api = new Aspi({ baseUrl: 'https://api.example.com' })
   .useCapability(loggingCapability)
   .useCapability(tracingCapability)
-  .useCapability(refreshTokenCapability);
+  .useCapability(tokenRefreshCapability);
 ```
 
-Example: token refresh (simplified)
+### Example: token refresh capability
 
 ```ts
-import type { Capability } from './interceptor';
-import { Aspi } from './aspi';
-import * as Result from './result';
+import type { Capability } from 'aspi';
 
-let tokens: { accessToken: string | null; refreshToken: string | null } = {
-  accessToken: null,
-  refreshToken: null,
-};
+let tokens = { access: '', refresh: '' };
 
-async function refreshTokenRequest(refreshToken: string) {
-  const res = await new Aspi({ baseUrl: 'https://auth.example.com' })
-    .post('/refresh')
-    .bodyJson({ refreshToken })
-    .withResult()
-    .json<{ accessToken: string; refreshToken: string }>();
-
-  await Result.match(res, {
-    onOk: ({ data }) => {
-      tokens = data;
-    },
-    onErr: (err) => {
-      tokens = { accessToken: null, refreshToken: null };
-      throw err;
-    },
-  });
-}
-
-export const refreshTokenCapability: Capability = ({ request }) => {
+const tokenRefreshCapability: Capability = () => {
   let isRefreshing = false;
 
   return {
     async run(runner) {
-      // First try
-      const first = await runner();
-
-      if (first.status !== 401) {
-        return first;
-      }
-
-      // No refresh token → just propagate 401
-      if (!tokens.refreshToken || isRefreshing) {
-        return first;
-      }
+      const res = await runner();
+      if (res.status !== 401 || !tokens.refresh || isRefreshing) return res;
 
       isRefreshing = true;
       try {
-        await refreshTokenRequest(tokens.refreshToken);
+        const refreshRes = await fetch('/auth/refresh', {
+          method: 'POST',
+          body: JSON.stringify({ refreshToken: tokens.refresh }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const body = await refreshRes.json();
+        tokens = { access: body.accessToken, refresh: body.refreshToken };
       } finally {
         isRefreshing = false;
       }
 
-      if (!tokens.accessToken) {
-        return first;
-      }
-
-      // Inject new Authorization header and retry once
-      request.requestInit.headers = {
-        ...request.requestInit.headers,
-        Authorization: `Bearer ${tokens.accessToken}`,
-      };
-
+      // Retry the original request with the new token
       return runner();
     },
   };
 };
 ```
 
+---
+
+## Result module
+
+`aspi` exports a standalone `Result` module — a small tagged-union utility used internally and available for your own code.
+
+```ts
+import * as Result from 'aspi/result';
+// or
+import { Result } from 'aspi';
+```
+
+### Creating results
+
+```ts
+const success = Result.ok(42);           // { __tag: 'ok', value: 42 }
+const failure = Result.err('not found'); // { __tag: 'err', error: 'not found' }
+```
+
+### Checking and extracting
+
+```ts
+Result.isOk(success)                     // true
+Result.isErr(failure)                    // true
+
+Result.getOrNull(success)                // 42
+Result.getOrNull(failure)                // null
+
+Result.getErrorOrNull(failure)           // 'not found'
+Result.getOrElse(failure, 0)             // 0
+
+Result.getOrThrow(success)               // 42
+Result.getOrThrow(failure)               // throws 'not found'
+
+Result.getOrThrowWith(failure, (e) => new Error(e)) // throws Error('not found')
+```
+
+### Transforming
+
+```ts
+Result.map(success, (n) => n * 2)                     // ok(84)
+Result.mapErr(failure, (e) => e.toUpperCase())         // err('NOT FOUND')
+
+// Curried style (useful in pipelines)
+const double = Result.map((n: number) => n * 2);
+double(success) // ok(84)
+```
+
+### Pattern matching
+
+```ts
+const message = Result.match(result, {
+  onOk:  ({ data }) => `Loaded ${data.name}`,
+  onErr: (err)     => `Failed: ${err.tag}`,
+});
+```
+
+### Handling tagged errors
+
+When the error type is a tagged union, use `catchError` and `catchErrors` to handle specific variants and narrow the remaining type.
+
+```ts
+type AppError =
+  | { tag: 'notFoundError'; message: string }
+  | { tag: 'unauthorizedError' }
+  | { tag: 'aspiError'; response: AspiResponse };
+
+// Handle one tag
+Result.catchError(result, 'notFoundError', (e) => {
+  console.warn(e.message);
+});
+
+// Handle multiple tags
+Result.catchErrors(result, {
+  notFoundError:    (e) => console.warn(e.message),
+  unauthorizedError: () => redirect('/login'),
+});
+```
+
+### Pipe utility
+
+```ts
+const price = Result.pipe(
+  1234,
+  (cents) => cents / 100,
+  (amount) => amount.toFixed(2),
+  (str) => `$${str}`,
+);
+// '$12.34'
+```
+
+---
+
+## Global configuration reference
+
+These methods are available on the `Aspi` instance and affect all requests created from it.
+
+| Method | Description |
+|---|---|
+| `setBaseUrl(url)` | Change the base URL |
+| `setHeaders(headers)` | Merge an object of headers |
+| `setHeader(key, value)` | Set a single header |
+| `setBearer(token)` | Shortcut for `Authorization: Bearer <token>` |
+| `setRetry(config)` | Set a global retry strategy |
+| `use(fn)` | Register a request-transformer middleware |
+| `useCapability(cap)` | Register a capability |
+| `withResult()` | Switch all requests to Result mode |
+| `throwable()` | Switch all requests to throwable mode |
+| `.error(tag, status, cb)` | Map an HTTP status to a typed error |
+
+Per-request methods (`api.get('/…').setQueryParams(…)`, `.schema(…)`, `.bodyJson(…)`, etc.) override the global config for that call only.
+
+---
+
+## Contributing
+
+```bash
+# Install dependencies
+pnpm install
+
+# Run tests in watch mode
+pnpm test
+
+# Run tests once (used in CI)
+pnpm test:run
+
+# Build
+pnpm build
+
+# Type-check
+pnpm lint
+
+# Format
+pnpm format
+```
+
+All CI checks (`pnpm ci`) run test, build, format check, and type-check in sequence. Please ensure they pass before opening a pull request.
+
+---
+
 ## License
 
-MIT © Aspi contributors
+MIT © [Harsh Pareek](https://hrshwrites.vercel.app)
