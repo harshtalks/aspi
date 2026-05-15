@@ -231,7 +231,7 @@ export class Request<
       if (data.issues) {
         this.#bodySchemaIssues = data.issues;
       } else {
-        this.#localRequestInit.body = JSON.stringify(body);
+        this.#localRequestInit.body = JSON.stringify(data.value);
       }
     } else {
       this.#localRequestInit.body = JSON.stringify(body);
