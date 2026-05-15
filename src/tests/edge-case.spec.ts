@@ -283,7 +283,7 @@ describe('Edge – JSON edge cases', () => {
 // ---------------------------------------------------------------------------
 
 describe('Edge – error precedence', () => {
-  it('custom handler wins over AspiError on final attempt', async () => {
+  it('custom handler short-circuits retries on first attempt', async () => {
     const api = createApi();
 
     const req = api
@@ -296,27 +296,19 @@ describe('Edge – error precedence', () => {
       .withResult()
       .internalServerError(() => ({ kind: 'custom-500' }));
 
-    // Both attempts return 500
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response('null', {
-          status: 500,
-          statusText: 'Internal Server Error',
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response('null', {
-          status: 500,
-          statusText: 'Internal Server Error',
-        }),
-      );
+    fetchMock.mockResolvedValueOnce(
+      new Response('null', {
+        status: 500,
+        statusText: 'Internal Server Error',
+      }),
+    );
 
     const res = await req.text();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // custom handler fires immediately — no retries
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(Result.isErr(res)).toBe(true);
     if (Result.isErr(res)) {
-      // custom 500 handler should have produced CustomError
       expect(res.error.tag).toBe('internalServerError');
       // @ts-expect-error data exists on CustomError
       expect(res.error.data).toEqual({ kind: 'custom-500' });

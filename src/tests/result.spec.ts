@@ -258,4 +258,17 @@ describe('pipe in “business logic” style', () => {
       throw new Error('expected ok');
     }
   });
+
+  it('pipe with 5 arguments uses the fast path (case 5)', () => {
+    const result = pipe(
+      1,
+      (n) => n + 1,
+      (n) => n * 2,
+      (n) => n + 10,
+      (n) => n.toString(),
+      (s) => `Result: ${s}`,
+    );
+
+    expect(result).toBe('Result: 14');
+  });
 });

@@ -1,5 +1,11 @@
 # aspi
 
+## 2.4.0
+
+### Minor Changes
+
+- 0788cab: capabilities type export
+
 ## 2.3.0
 
 ### Minor Changes

@@ -643,3 +643,91 @@ describe('Response – blob()', () => {
     });
   });
 });
+
+// ------------- arrayBuffer() and formData() -------------
+
+describe('Response – arrayBuffer()', () => {
+  it('withResult: ok for 2xx arrayBuffer', async () => {
+    const api = createApi();
+    const buffer = new Uint8Array([1, 2, 3]).buffer;
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(buffer, {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/octet-stream' },
+      }),
+    );
+
+    const res = await api.get('/binary').withResult().arrayBuffer();
+
+    expect(Result.isOk(res)).toBe(true);
+    if (Result.isOk(res)) {
+      expect(res.value.data).toBeInstanceOf(ArrayBuffer);
+      expect(new Uint8Array(res.value.data)).toEqual(new Uint8Array([1, 2, 3]));
+    }
+  });
+
+  it('throwable: ok for 2xx arrayBuffer', async () => {
+    const api = createApi();
+    const buffer = new Uint8Array([4, 5, 6]).buffer;
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(buffer, {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/octet-stream' },
+      }),
+    );
+
+    const res = await api.get('/binary').throwable().arrayBuffer();
+
+    expect(res.data).toBeInstanceOf(ArrayBuffer);
+    expect(new Uint8Array(res.data)).toEqual(new Uint8Array([4, 5, 6]));
+  });
+});
+
+describe('Response – formData()', () => {
+  it('withResult: ok for 2xx formData', async () => {
+    const api = createApi();
+    const form = new FormData();
+    form.append('name', 'Alice');
+
+    const mockResponse = new Response('', {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    vi.spyOn(mockResponse, 'formData').mockResolvedValue(form);
+
+    fetchMock.mockResolvedValueOnce(mockResponse);
+
+    const res = await api.get('/form').withResult().formData();
+
+    expect(Result.isOk(res)).toBe(true);
+    if (Result.isOk(res)) {
+      expect(res.value.data).toBeInstanceOf(FormData);
+      expect(res.value.data.get('name')).toBe('Alice');
+    }
+  });
+
+  it('throwable: ok for 2xx formData', async () => {
+    const api = createApi();
+    const form = new FormData();
+    form.append('name', 'Bob');
+
+    const mockResponse = new Response('', {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    vi.spyOn(mockResponse, 'formData').mockResolvedValue(form);
+
+    fetchMock.mockResolvedValueOnce(mockResponse);
+
+    const res = await api.get('/form').throwable().formData();
+
+    expect(res.data).toBeInstanceOf(FormData);
+    expect(res.data.get('name')).toBe('Bob');
+  });
+});
