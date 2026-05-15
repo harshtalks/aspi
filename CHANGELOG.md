@@ -1,5 +1,11 @@
 # aspi
 
+## 2.6.0
+
+### Minor Changes
+
+- 74b2603: exporting errors utility
+
 ## 2.5.0
 
 ### Minor Changes
