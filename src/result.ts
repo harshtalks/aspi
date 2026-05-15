@@ -1000,6 +1000,8 @@ export function pipe(
       return bc!(ab!(a));
     case 4:
       return cd!(bc!(ab!(a)));
+    case 5:
+      return de!(cd!(bc!(ab!(a))));
     case 6:
       return ef!(de!(cd!(bc!(ab!(a)))));
     case 7:

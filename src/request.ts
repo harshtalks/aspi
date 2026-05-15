@@ -59,6 +59,7 @@ export class Request<
   #schema: StandardSchemaV1 | null = null;
   #bodySchema: StandardSchemaV1 | null = null;
   #retryConfig?: AspiRetryConfig<TRequest>;
+  #timeoutMs?: number;
   #shouldBeResult: boolean = false;
   #bodySchemaIssues: StandardSchemaV1.FailureResult['issues'] = [];
   #throwOnError: boolean = false;
@@ -114,6 +115,25 @@ export class Request<
       ...this.#retryConfig,
       ...retry,
     };
+    return this;
+  }
+
+  /**
+   * Sets a timeout for the request in milliseconds.
+   *
+   * When the timeout expires, the request is aborted with an `AbortError`.
+   * If a signal was already provided, the timeout is chained so that either
+   * the external signal or the timeout can abort the request.
+   *
+   * @param {number} ms - Timeout duration in milliseconds.
+   * @returns {this} The current {@link Request} instance for method chaining.
+   *
+   * @example
+   * const request = new Request('/slow-endpoint', config);
+   * request.timeout(5000); // abort after 5 seconds
+   */
+  timeout(ms: number) {
+    this.#timeoutMs = ms;
     return this;
   }
 
@@ -907,6 +927,142 @@ export class Request<
     return this.#mapResponse(output);
   }
 
+  /**
+   * Executes the request and returns the response body as an {@link ArrayBuffer}.
+   *
+   * The shape of the returned {@link Promise} depends on the request mode:
+   *
+   * - **Result mode** (`withResult()`): resolves to a {@link Result.Result} containing
+   *   either an {@link AspiResultOk} with `ArrayBuffer` data or an error variant.
+   * - **Throwable mode** (`throwable()`): resolves directly to an {@link ArrayBuffer}
+   *   (wrapped in {@link AspiPlainResponse}) and throws on failure.
+   * - **Default mode**: resolves to a tuple `[value, error]` where exactly one element
+   *   is `null`.
+   *
+   * @returns {Promise<
+   *   Opts['withResult'] extends true
+   *     ? Result.Result<
+   *         AspiResultOk<TRequest, ArrayBuffer>,
+   *         | AspiError<TRequest>
+   *         | (Opts extends { error: any }
+   *             ? Opts['error'][keyof Opts['error']]
+   *             : never)
+   *       >
+   *     : Opts['throwable'] extends true
+   *       ? AspiPlainResponse<TRequest, ArrayBuffer>
+   *       : [
+   *           AspiResultOk<TRequest, ArrayBuffer> | null,
+   *           (
+   *             | (
+   *                 | AspiError<TRequest>
+   *                 | (Opts extends { error: any }
+   *                     ? Opts['error'][keyof Opts['error']]
+   *                     : never)
+   *               )
+   *             | null
+   *           ),
+   *         ]
+   * >}
+   */
+  async arrayBuffer(): Promise<
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, ArrayBuffer>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+        >
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, ArrayBuffer>
+        : [
+            AspiResultOk<TRequest, ArrayBuffer> | null,
+            (
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                )
+              | null
+            ),
+          ]
+  > {
+    const output = await this.#makeRequest<ArrayBuffer>((response) =>
+      response.arrayBuffer(),
+    );
+    // @ts-ignore
+    return this.#mapResponse(output);
+  }
+
+  /**
+   * Executes the request and returns the response body as {@link FormData}.
+   *
+   * The shape of the returned {@link Promise} depends on the request mode:
+   *
+   * - **Result mode** (`withResult()`): resolves to a {@link Result.Result} containing
+   *   either an {@link AspiResultOk} with `FormData` or an error variant.
+   * - **Throwable mode** (`throwable()`): resolves directly to {@link FormData}
+   *   (wrapped in {@link AspiPlainResponse}) and throws on failure.
+   * - **Default mode**: resolves to a tuple `[value, error]` where exactly one element
+   *   is `null`.
+   *
+   * @returns {Promise<
+   *   Opts['withResult'] extends true
+   *     ? Result.Result<
+   *         AspiResultOk<TRequest, FormData>,
+   *         | AspiError<TRequest>
+   *         | (Opts extends { error: any }
+   *             ? Opts['error'][keyof Opts['error']]
+   *             : never)
+   *       >
+   *     : Opts['throwable'] extends true
+   *       ? AspiPlainResponse<TRequest, FormData>
+   *       : [
+   *           AspiResultOk<TRequest, FormData> | null,
+   *           (
+   *             | (
+   *                 | AspiError<TRequest>
+   *                 | (Opts extends { error: any }
+   *                     ? Opts['error'][keyof Opts['error']]
+   *                     : never)
+   *               )
+   *             | null
+   *           ),
+   *         ]
+   * >}
+   */
+  async formData(): Promise<
+    Opts['withResult'] extends true
+      ? Result.Result<
+          AspiResultOk<TRequest, FormData>,
+          | AspiError<TRequest>
+          | (Opts extends { error: any }
+              ? Opts['error'][keyof Opts['error']]
+              : never)
+        >
+      : Opts['throwable'] extends true
+        ? AspiPlainResponse<TRequest, FormData>
+        : [
+            AspiResultOk<TRequest, FormData> | null,
+            (
+              | (
+                  | AspiError<TRequest>
+                  | (Opts extends { error: any }
+                      ? Opts['error'][keyof Opts['error']]
+                      : never)
+                )
+              | null
+            ),
+          ]
+  > {
+    const output = await this.#makeRequest<FormData>((response) =>
+      response.formData(),
+    );
+    // @ts-ignore
+    return this.#mapResponse(output);
+  }
+
   #url() {
     // If path is already absolute, ignore baseUrl entirely
     if (this.#path.startsWith('http://') || this.#path.startsWith('https://')) {
@@ -941,9 +1097,6 @@ export class Request<
     // collapse internal multiple slashes to single
     path = path.replace(/\/{2,}/g, '/');
 
-    // Remove any trailing slash from the normalized path
-    path = path.replace(/\/+$/, '');
-
     if (path) {
       path = '/' + path.replace(/^\/+/, '');
     }
@@ -969,9 +1122,6 @@ export class Request<
     if (fragment) {
       url += `#${fragment}`;
     }
-
-    // Ensure the final URL does not end with a trailing slash
-    url = url.replace(/\/+$/, '');
 
     return url;
   }
@@ -1113,16 +1263,34 @@ export class Request<
       let responseData = null;
 
       while (attempts <= retries) {
+        let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
         try {
-          if (this.#capabilities.length > 0) {
-            for (const capability of this.#capabilities) {
-              response = await capability({ request }).run(() =>
-                fetch(url, requestInit),
+          const attemptInit = { ...requestInit };
+          if (this.#timeoutMs && this.#timeoutMs > 0) {
+            const timeoutController = new AbortController();
+            timeoutTimer = setTimeout(
+              () => timeoutController.abort(),
+              this.#timeoutMs,
+            );
+            if (attemptInit.signal) {
+              attemptInit.signal.addEventListener(
+                'abort',
+                () => timeoutController.abort(),
+                { once: true },
               );
             }
-          } else {
-            response = await fetch(url, requestInit);
+            attemptInit.signal = timeoutController.signal;
           }
+
+          let runner = () => fetch(url, attemptInit);
+          for (let i = this.#capabilities.length - 1; i >= 0; i--) {
+            const cap = this.#capabilities[i];
+            const next = runner;
+            runner = () => cap({ request }).run(next);
+          }
+          response = await runner();
+
+          if (timeoutTimer) clearTimeout(timeoutTimer);
 
           responseData = await responseParser(response);
 
@@ -1149,8 +1317,8 @@ export class Request<
             break;
           }
 
-          if (response.status in this.#customErrorCbs && attempts === retries) {
-            // custom error handler for this status code
+          if (response.status in this.#customErrorCbs) {
+            // custom error handler for this status code — short-circuit retries
             const result = this.#customErrorCbs[response.status].cb({
               request,
               response: this.#makeResponse(response, responseData),
@@ -1181,6 +1349,8 @@ export class Request<
             await this.#abortDelay(delay, request);
           }
         } catch (e) {
+          if (timeoutTimer) clearTimeout(timeoutTimer);
+
           // Abort handling – stop all further retries and fail immediately
           if (e instanceof Error && e.name === 'AbortError') {
             // If a custom 500 handler exists, honor it
@@ -1490,6 +1660,7 @@ export class Request<
    * ```
    */
   useCapability(capability: Capability<TRequest>) {
-    return this.#capabilities.push(capability);
+    this.#capabilities.push(capability);
+    return this;
   }
 }

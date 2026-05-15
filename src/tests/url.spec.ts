@@ -20,9 +20,9 @@ describe('URL Building', () => {
       expect(req.url()).toBe('https://api.example.com/users');
     });
 
-    it('normalizes multiple leading/trailing slashes', () => {
+    it('normalizes multiple leading/trailing slashes but preserves intentional trailing slash', () => {
       const req = api.get('///users//1///');
-      expect(req.url()).toBe('https://api.example.com/users/1');
+      expect(req.url()).toBe('https://api.example.com/users/1/');
     });
 
     it('handles trailing slash on baseUrl', () => {
@@ -31,10 +31,10 @@ describe('URL Building', () => {
       expect(req.url()).toBe('https://api.example.com/users');
     });
 
-    it('handles trailing slash on both baseUrl and path', () => {
+    it('preserves trailing slash on path', () => {
       const apiTrailing = new Aspi({ baseUrl: 'https://api.example.com/' });
       const req = apiTrailing.get('/users/');
-      expect(req.url()).toBe('https://api.example.com/users');
+      expect(req.url()).toBe('https://api.example.com/users/');
     });
 
     it('empty path returns baseUrl', () => {
@@ -58,18 +58,18 @@ describe('URL Building', () => {
       expect(req.url()).toBe('https://api.example.com/api/v1/users');
     });
 
-    it('normalizes extra slashes between baseUrl and path', () => {
+    it('normalizes extra slashes between baseUrl and path and preserves trailing slash', () => {
       const api = new Aspi({ baseUrl: 'https://api.example.com/api/v1/' });
       const req = api.get('///users//1///');
 
-      expect(req.url()).toBe('https://api.example.com/api/v1/users/1');
+      expect(req.url()).toBe('https://api.example.com/api/v1/users/1/');
     });
 
     it('keeps trailing slash on path when present', () => {
       const api = new Aspi({ baseUrl: 'https://api.example.com/api/v1/' });
       const req = api.get('/users/');
 
-      expect(req.url()).toBe('https://api.example.com/api/v1/users');
+      expect(req.url()).toBe('https://api.example.com/api/v1/users/');
     });
 
     it('empty path yields baseUrl as-is', () => {
