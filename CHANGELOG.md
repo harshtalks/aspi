@@ -1,5 +1,11 @@
 # aspi
 
+## 2.5.0
+
+### Minor Changes
+
+- df31fd6: updated logic for capabilities, timer etc
+
 ## 2.4.0
 
 ### Minor Changes
