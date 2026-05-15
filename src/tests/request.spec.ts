@@ -127,7 +127,7 @@ describe('Request – body configuration', () => {
     expect(req.requestInit.body).toBe(JSON.stringify({ name: 'John' }));
   });
 
-  it('bodyJson does not send request and returns parseError when schema fails', async () => {
+  it('bodyJson does not send request and returns schemaParseError when schema fails', async () => {
     const api = createApi();
     const schema = dummySchema((_value) => ({
       value: null,
@@ -145,8 +145,8 @@ describe('Request – body configuration', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(Result.isErr(result)).toBe(true);
     if (Result.isErr(result)) {
-      expect(result.error.tag).toBe('parseError');
-      if (result.error.tag === 'parseError') {
+      expect(result.error.tag).toBe('schemaParseError');
+      if (result.error.tag === 'schemaParseError') {
         expect(result.error.data).toEqual([
           { path: ['name'], message: 'Required' },
         ]);
@@ -169,7 +169,7 @@ describe('Request – body configuration', () => {
 // -------------------- response schema() --------------------
 
 describe('Request – response schema validation', () => {
-  it('schema() returns parseError when validation fails', async () => {
+  it('schema() returns schemaParseError when validation fails', async () => {
     const api = createApi();
     const schema = dummySchema((_value) => ({
       value: null,
@@ -189,8 +189,8 @@ describe('Request – response schema validation', () => {
 
     expect(Result.isErr(result)).toBe(true);
     if (Result.isErr(result)) {
-      expect(result.error.tag).toBe('parseError');
-      if (result.error.tag === 'parseError') {
+      expect(result.error.tag).toBe('schemaParseError');
+      if (result.error.tag === 'schemaParseError') {
         expect(result.error.data).toEqual([
           { path: ['id'], message: 'Expected number' },
         ]);

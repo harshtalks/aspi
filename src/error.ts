@@ -91,10 +91,14 @@ export interface JSONParseError extends CustomError<
 > {}
 
 /**
- * Type alias for a schema validation parse error.
- * Emitted when either the request body schema or the response schema fails validation.
+ * Interface representing a schema validation error (body or response).
+ * @interface SchemaParseError
+ * @extends {CustomError<'schemaParseError', ReadonlyArray<StandardSchemaV1.Issue>>}
  */
-export type ParseError = CustomError<'parseError', unknown>;
+export interface SchemaParseError extends CustomError<
+  'schemaParseError',
+  ReadonlyArray<import('./standard-schema').StandardSchemaV1.Issue>
+> {}
 
 export const isAspiError = <TReq extends AspiRequestInit>(
   error: unknown,
@@ -108,10 +112,10 @@ export const isCustomError = <Tag extends string, A>(
   return error instanceof CustomError;
 };
 
-export const isParseError = (error: unknown): error is ParseError => {
-  return error instanceof CustomError && error.tag === 'parseError';
-};
-
 export const isJSONParseError = (error: unknown): error is JSONParseError => {
   return error instanceof CustomError && error.tag === 'jsonParseError';
+};
+
+export const isSchemaParseError = (error: unknown): error is SchemaParseError => {
+  return error instanceof CustomError && error.tag === 'schemaParseError';
 };

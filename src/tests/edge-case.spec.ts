@@ -337,8 +337,8 @@ describe('Edge – error precedence', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(Result.isErr(res)).toBe(true);
     if (Result.isErr(res)) {
-      expect(res.error.tag).toBe('parseError');
-      if (res.error.tag === 'parseError')
+      expect(res.error.tag).toBe('schemaParseError');
+      if (res.error.tag === 'schemaParseError')
         expect(res.error.data).toEqual([
           { path: ['name'], message: 'Required' },
         ]);
@@ -350,10 +350,10 @@ describe('Edge – error precedence', () => {
 // 6. Error type guards
 // ---------------------------------------------------------------------------
 
-import { isParseError, isJSONParseError, isAspiError } from '../error';
+import { isJSONParseError, isAspiError, isSchemaParseError } from '../error';
 
 describe('Edge – error type guards', () => {
-  it('isParseError narrows a parseError CustomError', async () => {
+  it('isSchemaParseError narrows a schemaParseError CustomError', async () => {
     const api = createApi();
     const bodySchema = makeDummySchema((_v) => ({
       value: null,
@@ -369,7 +369,7 @@ describe('Edge – error type guards', () => {
 
     expect(Result.isErr(res)).toBe(true);
     if (Result.isErr(res)) {
-      expect(isParseError(res.error)).toBe(true);
+      expect(isSchemaParseError(res.error)).toBe(true);
       expect(isAspiError(res.error)).toBe(false);
       expect(isJSONParseError(res.error)).toBe(false);
     }
@@ -392,7 +392,6 @@ describe('Edge – error type guards', () => {
     expect(Result.isErr(res)).toBe(true);
     if (Result.isErr(res)) {
       expect(isJSONParseError(res.error)).toBe(true);
-      expect(isParseError(res.error)).toBe(false);
       expect(isAspiError(res.error)).toBe(false);
     }
   });
@@ -414,7 +413,6 @@ describe('Edge – error type guards', () => {
     expect(Result.isErr(res)).toBe(true);
     if (Result.isErr(res)) {
       expect(isAspiError(res.error)).toBe(true);
-      expect(isParseError(res.error)).toBe(false);
       expect(isJSONParseError(res.error)).toBe(false);
     }
   });

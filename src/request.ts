@@ -218,8 +218,8 @@ export class Request<
       Omit<Opts, 'bodySchema'> & {
         bodySchema: TSchema;
         error: Opts['error'] & {
-          parseError: CustomError<
-            'parseError',
+          schemaParseError: CustomError<
+            'schemaParseError',
             StandardSchemaV1.FailureResult['issues']
           >;
         };
@@ -617,8 +617,8 @@ export class Request<
           error: Merge<
             Opts['error'],
             {
-              parseError: CustomError<
-                'parseError',
+              schemaParseError: CustomError<
+                'schemaParseError',
                 StandardSchemaV1.FailureResult['issues']
               >;
             }
@@ -1237,7 +1237,7 @@ export class Request<
     // when the body schema fails, return the error. no need to make the request
     if (this.#bodySchemaIssues.length) {
       // @ts-ignore
-      return Result.err(new CustomError('parseError', this.#bodySchemaIssues));
+      return Result.err(new CustomError('schemaParseError', this.#bodySchemaIssues));
     }
 
     // request in the AspiRequest<RequestInit> format
@@ -1437,7 +1437,7 @@ export class Request<
 
         if (data.issues) {
           // @ts-ignore
-          return Result.err(new CustomError('parseError', data.issues));
+          return Result.err(new CustomError('schemaParseError', data.issues));
         }
 
         return Result.ok({
