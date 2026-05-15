@@ -89,10 +89,16 @@ describe('Capability – composition', () => {
 
     fetchMock
       .mockResolvedValueOnce(
-        new Response('null', { status: 500, statusText: 'Internal Server Error' }),
+        new Response('null', {
+          status: 500,
+          statusText: 'Internal Server Error',
+        }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }),
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          statusText: 'OK',
+        }),
       );
 
     const req = api.get('/users').useCapability(retryCap).withResult();
@@ -129,7 +135,11 @@ describe('Capability – composition', () => {
 describe('Capability – chaining', () => {
   it('useCapability returns the Request for fluent chaining', () => {
     const api = createApi();
-    const noop = () => ({ async run(runner: () => Promise<Response>) { return runner(); } });
+    const noop = () => ({
+      async run(runner: () => Promise<Response>) {
+        return runner();
+      },
+    });
 
     const req = api.get('/users').useCapability(noop).withResult();
     expect(req.isResult()).toBe(true);
@@ -148,7 +158,9 @@ describe('Capability – timeout', () => {
       () =>
         new Promise((_, reject) => {
           setTimeout(() => {
-            reject(new DOMException('The operation was aborted.', 'AbortError'));
+            reject(
+              new DOMException('The operation was aborted.', 'AbortError'),
+            );
           }, 100);
         }),
     );
@@ -189,7 +201,9 @@ describe('Capability – timeout', () => {
       () =>
         new Promise((_, reject) => {
           setTimeout(() => {
-            reject(new DOMException('The operation was aborted.', 'AbortError'));
+            reject(
+              new DOMException('The operation was aborted.', 'AbortError'),
+            );
           }, 100);
         }),
     );
@@ -214,7 +228,9 @@ describe('Capability – timeout', () => {
       () =>
         new Promise((_, reject) => {
           setTimeout(() => {
-            reject(new DOMException('The user aborted a request.', 'AbortError'));
+            reject(
+              new DOMException('The user aborted a request.', 'AbortError'),
+            );
           }, 200);
         }),
     );
