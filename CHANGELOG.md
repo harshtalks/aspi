@@ -1,5 +1,11 @@
 # aspi
 
+## 2.3.0
+
+### Minor Changes
+
+- e66c8c6: bodyjson fix
+
 ## 2.2.1
 
 ### Patch Changes
