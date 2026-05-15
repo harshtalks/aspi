@@ -347,7 +347,81 @@ describe('Edge – error precedence', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. Mode guardrails
+// 6. Error type guards
+// ---------------------------------------------------------------------------
+
+import { isParseError, isJSONParseError, isAspiError } from '../error';
+
+describe('Edge – error type guards', () => {
+  it('isParseError narrows a parseError CustomError', async () => {
+    const api = createApi();
+    const bodySchema = makeDummySchema((_v) => ({
+      value: null,
+      issues: [{ path: ['name'], message: 'Required' }],
+    }));
+
+    const req = api
+      .post('/users')
+      .bodySchema(bodySchema)
+      .bodyJson({} as any)
+      .withResult();
+    const res = await req.json();
+
+    expect(Result.isErr(res)).toBe(true);
+    if (Result.isErr(res)) {
+      expect(isParseError(res.error)).toBe(true);
+      expect(isAspiError(res.error)).toBe(false);
+      expect(isJSONParseError(res.error)).toBe(false);
+    }
+  });
+
+  it('isJSONParseError narrows a jsonParseError CustomError', async () => {
+    const api = createApi();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response('{ invalid json', {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const req = api.get('/broken').withResult();
+    const res = await req.json();
+
+    expect(Result.isErr(res)).toBe(true);
+    if (Result.isErr(res)) {
+      expect(isJSONParseError(res.error)).toBe(true);
+      expect(isParseError(res.error)).toBe(false);
+      expect(isAspiError(res.error)).toBe(false);
+    }
+  });
+
+  it('isAspiError narrows a plain AspiError', async () => {
+    const api = createApi();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: true }), {
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const req = api.get('/fail').withResult();
+    const res = await req.json();
+
+    expect(Result.isErr(res)).toBe(true);
+    if (Result.isErr(res)) {
+      expect(isAspiError(res.error)).toBe(true);
+      expect(isParseError(res.error)).toBe(false);
+      expect(isJSONParseError(res.error)).toBe(false);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Mode guardrails
 // ---------------------------------------------------------------------------
 
 describe('Edge – mode guardrails', () => {
