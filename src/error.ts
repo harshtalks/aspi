@@ -116,6 +116,8 @@ export const isJSONParseError = (error: unknown): error is JSONParseError => {
   return error instanceof CustomError && error.tag === 'jsonParseError';
 };
 
-export const isSchemaParseError = (error: unknown): error is SchemaParseError => {
+export const isSchemaParseError = (
+  error: unknown,
+): error is SchemaParseError => {
   return error instanceof CustomError && error.tag === 'schemaParseError';
 };

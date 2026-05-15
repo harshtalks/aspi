@@ -1237,7 +1237,9 @@ export class Request<
     // when the body schema fails, return the error. no need to make the request
     if (this.#bodySchemaIssues.length) {
       // @ts-ignore
-      return Result.err(new CustomError('schemaParseError', this.#bodySchemaIssues));
+      return Result.err(
+        new CustomError('schemaParseError', this.#bodySchemaIssues),
+      );
     }
 
     // request in the AspiRequest<RequestInit> format
