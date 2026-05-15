@@ -53,7 +53,7 @@ const [data, error] = await api
   .json<{ id: number; title: string; completed: boolean }>();
 
 if (error) {
-  if (error.tag === 'aspiError')    console.error(error.response.status);
+  if (error.tag === 'aspiError') console.error(error.response.status);
   if (error.tag === 'notFoundError') console.warn(error.data.message);
   if (error.tag === 'jsonParseError') console.error(error.data.message);
 }
@@ -74,7 +74,9 @@ Returns `[AspiResultOk | null, ErrorUnion | null]`. Familiar to anyone who has u
 ```ts
 const [data, error] = await api.get('/users/1').json<User>();
 
-if (error) { /* handle */ }
+if (error) {
+  /* handle */
+}
 console.log(data!.name);
 ```
 
@@ -83,14 +85,11 @@ console.log(data!.name);
 Returns a `Result<Ok, ErrorUnion>` tagged union. Use `.withResult()` to enable.
 
 ```ts
-const result = await api
-  .get('/users/1')
-  .withResult()
-  .json<User>();
+const result = await api.get('/users/1').withResult().json<User>();
 
 Result.match(result, {
   onOk: ({ data }) => console.log(data.name),
-  onErr: (err)  => console.error(err.tag, err),
+  onErr: (err) => console.error(err.tag, err),
 });
 ```
 
@@ -117,12 +116,12 @@ try {
 
 Every response mode surfaces the same tagged error variants:
 
-| Tag | When |
-|---|---|
-| `aspiError` | Any non-2xx response with no matching custom handler |
-| `jsonParseError` | Response body could not be parsed as JSON |
-| `parseError` | Response failed schema validation (when `.schema()` is used) |
-| *custom* | Any tag you define via `.error()` or a convenience shortcut |
+| Tag              | When                                                         |
+| ---------------- | ------------------------------------------------------------ |
+| `aspiError`      | Any non-2xx response with no matching custom handler         |
+| `jsonParseError` | Response body could not be parsed as JSON                    |
+| `parseError`     | Response failed schema validation (when `.schema()` is used) |
+| _custom_         | Any tag you define via `.error()` or a convenience shortcut  |
 
 ### Custom error mapping
 
@@ -146,16 +145,16 @@ if (error?.tag === 'rateLimitedError') {
 
 Pre-built shortcuts for the most common statuses. Each produces a typed error with a predictable tag.
 
-| Method | Status | Error tag |
-|---|---|---|
-| `.notFound(cb)` | 404 | `notFoundError` |
-| `.badRequest(cb)` | 400 | `badRequestError` |
-| `.unauthorized(cb)` | 401 | `unauthorizedError` |
-| `.forbidden(cb)` | 403 | `forbiddenError` |
-| `.conflict(cb)` | 409 | `conflictError` |
-| `.tooManyRequests(cb)` | 429 | `tooManyRequestsError` |
-| `.notImplemented(cb)` | 501 | `notImplementedError` |
-| `.internalServerError(cb)` | 500 | `internalServerError` |
+| Method                     | Status | Error tag              |
+| -------------------------- | ------ | ---------------------- |
+| `.notFound(cb)`            | 404    | `notFoundError`        |
+| `.badRequest(cb)`          | 400    | `badRequestError`      |
+| `.unauthorized(cb)`        | 401    | `unauthorizedError`    |
+| `.forbidden(cb)`           | 403    | `forbiddenError`       |
+| `.conflict(cb)`            | 409    | `conflictError`        |
+| `.tooManyRequests(cb)`     | 429    | `tooManyRequestsError` |
+| `.notImplemented(cb)`      | 501    | `notImplementedError`  |
+| `.internalServerError(cb)` | 500    | `internalServerError`  |
 
 > Note: When calling these on the `Request` object (e.g. `api.get('/…').unauthorised(…)`) the method is spelled `.unauthorised()` (British) and produces an `unauthorisedError` tag. On the `Aspi` instance itself the method is `.unauthorized()` (American). All other shortcuts are spelled identically on both.
 
@@ -176,10 +175,10 @@ The base `aspiError` variant exposes the full request and response, plus an `.if
 
 ```ts
 if (error?.tag === 'aspiError') {
-  console.log(error.response.status);       // numeric HTTP status code
-  console.log(error.response.statusLabel);  // e.g. "NOT_FOUND"
-  console.log(error.response.statusText);   // raw status text
-  console.log(error.request.path);          // request path
+  console.log(error.response.status); // numeric HTTP status code
+  console.log(error.response.statusLabel); // e.g. "NOT_FOUND"
+  console.log(error.response.statusText); // raw status text
+  console.log(error.request.path); // request path
 
   // Run a callback only for a specific status
   error.ifMatch('INTERNAL_SERVER_ERROR', ({ response }) => {
@@ -195,13 +194,13 @@ if (error?.tag === 'aspiError') {
 ### HTTP methods
 
 ```ts
-api.get('/users')
-api.post('/users')
-api.put('/users/1')
-api.patch('/users/1')
-api.delete('/users/1')
-api.head('/users')
-api.options('/users')
+api.get('/users');
+api.post('/users');
+api.put('/users/1');
+api.patch('/users/1');
+api.delete('/users/1');
+api.head('/users');
+api.options('/users');
 ```
 
 ### Request body
@@ -225,7 +224,7 @@ const CreateUserSchema = z.object({
 
 const [data, error] = await api
   .post('/users')
-  .bodySchema(CreateUserSchema)   // validate before sending
+  .bodySchema(CreateUserSchema) // validate before sending
   .bodyJson({ name: 'Alice', email: 'alice@example.com' })
   .json<User>();
 
@@ -241,7 +240,10 @@ const [data, error] = await api
 api.get('/todos').setQueryParams({ page: '2', limit: '20' }).json();
 
 // URLSearchParams
-api.get('/todos').setQueryParams(new URLSearchParams({ q: 'typescript' })).json();
+api
+  .get('/todos')
+  .setQueryParams(new URLSearchParams({ q: 'typescript' }))
+  .json();
 
 // Check the resolved URL before sending
 console.log(api.get('/todos').setQueryParams({ page: '2' }).url());
@@ -273,7 +275,7 @@ const api = new Aspi({
   headers: { 'Content-Type': 'application/json' },
 }).setRetry({
   retries: 3,
-  retryDelay: 500,          // fixed 500 ms between attempts
+  retryDelay: 500, // fixed 500 ms between attempts
   retryOn: [429, 500, 502, 503, 504],
 });
 
@@ -291,13 +293,13 @@ const [data, error] = await api
 
 ### Retry config options
 
-| Option | Type | Description |
-|---|---|---|
-| `retries` | `number` | Maximum number of retry attempts |
-| `retryDelay` | `number \| (remaining, total, request, response) => number` | Delay in ms, or a function returning one |
-| `retryOn` | `number[]` | HTTP status codes that should trigger a retry |
-| `retryWhile` | `(request, response) => boolean` | Custom predicate — return `true` to retry |
-| `onRetry` | `(request, response) => void` | Hook called after each failed attempt |
+| Option       | Type                                                        | Description                                   |
+| ------------ | ----------------------------------------------------------- | --------------------------------------------- |
+| `retries`    | `number`                                                    | Maximum number of retry attempts              |
+| `retryDelay` | `number \| (remaining, total, request, response) => number` | Delay in ms, or a function returning one      |
+| `retryOn`    | `number[]`                                                  | HTTP status codes that should trigger a retry |
+| `retryWhile` | `(request, response) => boolean`                            | Custom predicate — return `true` to retry     |
+| `onRetry`    | `(request, response) => void`                               | Hook called after each failed attempt         |
 
 ---
 
@@ -316,14 +318,10 @@ const TodoSchema = z.object({
   completed: z.boolean(),
 });
 
-const result = await api
-  .get('/todos/1')
-  .withResult()
-  .schema(TodoSchema)
-  .json(); // return type is inferred from the schema
+const result = await api.get('/todos/1').withResult().schema(TodoSchema).json(); // return type is inferred from the schema
 
 Result.match(result, {
-  onOk: ({ data }) => console.log(data.title),   // data: { id: number; title: string; completed: boolean }
+  onOk: ({ data }) => console.log(data.title), // data: { id: number; title: string; completed: boolean }
   onErr: (err) => {
     if (err.tag === 'parseError') {
       console.error('Validation failed:', err.data); // StandardSchemaV1 issue list
@@ -340,14 +338,13 @@ Result.match(result, {
 
 ```ts
 // Add a correlation ID to every outgoing request
-const api = new Aspi({ baseUrl: 'https://api.example.com' })
-  .use((req) => ({
-    ...req,
-    headers: {
-      ...req.headers,
-      'X-Correlation-ID': crypto.randomUUID(),
-    },
-  }));
+const api = new Aspi({ baseUrl: 'https://api.example.com' }).use((req) => ({
+  ...req,
+  headers: {
+    ...req.headers,
+    'X-Correlation-ID': crypto.randomUUID(),
+  },
+}));
 
 // Chain multiple transformers
 const authedApi = api.use((req) => ({
@@ -376,8 +373,9 @@ const loggingCapability: Capability = ({ request }) => ({
   },
 });
 
-const api = new Aspi({ baseUrl: 'https://api.example.com' })
-  .useCapability(loggingCapability);
+const api = new Aspi({ baseUrl: 'https://api.example.com' }).useCapability(
+  loggingCapability,
+);
 ```
 
 Capabilities are composed in registration order, each wrapping the next.
@@ -439,45 +437,45 @@ import { Result } from 'aspi';
 ### Creating results
 
 ```ts
-const success = Result.ok(42);           // { __tag: 'ok', value: 42 }
+const success = Result.ok(42); // { __tag: 'ok', value: 42 }
 const failure = Result.err('not found'); // { __tag: 'err', error: 'not found' }
 ```
 
 ### Checking and extracting
 
 ```ts
-Result.isOk(success)                     // true
-Result.isErr(failure)                    // true
+Result.isOk(success); // true
+Result.isErr(failure); // true
 
-Result.getOrNull(success)                // 42
-Result.getOrNull(failure)                // null
+Result.getOrNull(success); // 42
+Result.getOrNull(failure); // null
 
-Result.getErrorOrNull(failure)           // 'not found'
-Result.getOrElse(failure, 0)             // 0
+Result.getErrorOrNull(failure); // 'not found'
+Result.getOrElse(failure, 0); // 0
 
-Result.getOrThrow(success)               // 42
-Result.getOrThrow(failure)               // throws 'not found'
+Result.getOrThrow(success); // 42
+Result.getOrThrow(failure); // throws 'not found'
 
-Result.getOrThrowWith(failure, (e) => new Error(e)) // throws Error('not found')
+Result.getOrThrowWith(failure, (e) => new Error(e)); // throws Error('not found')
 ```
 
 ### Transforming
 
 ```ts
-Result.map(success, (n) => n * 2)                     // ok(84)
-Result.mapErr(failure, (e) => e.toUpperCase())         // err('NOT FOUND')
+Result.map(success, (n) => n * 2); // ok(84)
+Result.mapErr(failure, (e) => e.toUpperCase()); // err('NOT FOUND')
 
 // Curried style (useful in pipelines)
 const double = Result.map((n: number) => n * 2);
-double(success) // ok(84)
+double(success); // ok(84)
 ```
 
 ### Pattern matching
 
 ```ts
 const message = Result.match(result, {
-  onOk:  ({ data }) => `Loaded ${data.name}`,
-  onErr: (err)     => `Failed: ${err.tag}`,
+  onOk: ({ data }) => `Loaded ${data.name}`,
+  onErr: (err) => `Failed: ${err.tag}`,
 });
 ```
 
@@ -498,7 +496,7 @@ Result.catchError(result, 'notFoundError', (e) => {
 
 // Handle multiple tags
 Result.catchErrors(result, {
-  notFoundError:    (e) => console.warn(e.message),
+  notFoundError: (e) => console.warn(e.message),
   unauthorizedError: () => redirect('/login'),
 });
 ```
@@ -521,18 +519,18 @@ const price = Result.pipe(
 
 These methods are available on the `Aspi` instance and affect all requests created from it.
 
-| Method | Description |
-|---|---|
-| `setBaseUrl(url)` | Change the base URL |
-| `setHeaders(headers)` | Merge an object of headers |
-| `setHeader(key, value)` | Set a single header |
-| `setBearer(token)` | Shortcut for `Authorization: Bearer <token>` |
-| `setRetry(config)` | Set a global retry strategy |
-| `use(fn)` | Register a request-transformer middleware |
-| `useCapability(cap)` | Register a capability |
-| `withResult()` | Switch all requests to Result mode |
-| `throwable()` | Switch all requests to throwable mode |
-| `.error(tag, status, cb)` | Map an HTTP status to a typed error |
+| Method                    | Description                                  |
+| ------------------------- | -------------------------------------------- |
+| `setBaseUrl(url)`         | Change the base URL                          |
+| `setHeaders(headers)`     | Merge an object of headers                   |
+| `setHeader(key, value)`   | Set a single header                          |
+| `setBearer(token)`        | Shortcut for `Authorization: Bearer <token>` |
+| `setRetry(config)`        | Set a global retry strategy                  |
+| `use(fn)`                 | Register a request-transformer middleware    |
+| `useCapability(cap)`      | Register a capability                        |
+| `withResult()`            | Switch all requests to Result mode           |
+| `throwable()`             | Switch all requests to throwable mode        |
+| `.error(tag, status, cb)` | Map an HTTP status to a typed error          |
 
 Per-request methods (`api.get('/…').setQueryParams(…)`, `.schema(…)`, `.bodyJson(…)`, etc.) override the global config for that call only.
 
